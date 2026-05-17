@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <title>AR Tourism – Admin</title>
+
+  <!-- Leaflet for coordinate picking -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- QR code generation (pure-browser, exposes window.qrcode) -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+
+  <style>
+    :root {
+      --accent:  #4fc3f7;
+      --accent-dark: #0288d1;
+      --danger:  #e53935;
+      --success: #43a047;
+      --bg:      #f8f9fa;
+      --card:    #ffffff;
+      --border:  #e0e0e0;
+      --text:    #1a1a2e;
+      --muted:   #6b7280;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; }
+    body { min-height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; font-size: 14px; }
+
+    /* ── Layout ── */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: #ffffff; border-bottom: 1px solid var(--border);
+      padding: 0 20px; height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .logo { font-size: 16px; font-weight: 700; color: var(--accent-dark); display: flex; align-items: center; gap: 8px; }
+    .header-actions { display: flex; gap: 10px; align-items: center; }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 80px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 8px 16px; border-radius: 9px; font-size: 13px; font-weight: 600;
+      cursor: pointer; border: none; transition: opacity 0.15s;
+    }
+    .btn:active { opacity: 0.75; }
+    .btn-primary   { background: var(--accent); color: #fff; }
+    .btn-secondary { background: #ffffff; color: var(--text); border: 1px solid var(--border); }
+    .btn-danger    { background: rgba(229,57,53,0.1); color: var(--danger); border: 1px solid rgba(229,57,53,0.25); }
+    .btn-success   { background: var(--success); color: #fff; }
+    .btn-sm { padding: 5px 11px; font-size: 12px; border-radius: 7px; }
+
+    /* ── Section header ── */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .section-header h2 { font-size: 17px; font-weight: 700; color: var(--text); }
+    .badge {
+      background: rgba(79,195,247,0.15); color: var(--accent-dark);
+      font-size: 12px; padding: 2px 9px; border-radius: 10px; font-weight: 600;
+    }
+
+    /* ── Spots table ── */
+    .table-wrap { overflow-x: auto; border-radius: 14px; border: 1px solid var(--border);
+                  box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      background: #f5f5f5; color: var(--muted); font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      padding: 12px 14px; text-align: left; white-space: nowrap;
+    }
+    tbody tr { border-top: 1px solid var(--border); }
+    tbody tr:hover { background: rgba(0,0,0,0.02); }
+    td { padding: 12px 14px; vertical-align: middle; }
+    td.name-cell { font-weight: 600; color: var(--text); max-width: 180px; }
+    td.desc-cell { color: var(--muted); max-width: 260px; }
+    .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+    .cat-badge {
+      display: inline-block; font-size: 11px; padding: 2px 9px;
+      border-radius: 10px; font-weight: 600;
+      background: rgba(107,114,128,0.12); color: #6b7280;
+    }
+    .cat-badge.heritage { background: rgba(217,119,6,0.12);   color: #b45309; }
+    .cat-badge.nature   { background: rgba(16,185,129,0.12);  color: #047857; }
+    .cat-badge.facility { background: rgba(59,130,246,0.12);  color: #1d4ed8; }
+    .cat-badge.shop     { background: rgba(236,72,153,0.12);  color: #be185d; }
+    .coord { font-family: monospace; font-size: 12px; color: var(--muted); }
+    .actions-cell { white-space: nowrap; }
+    .empty-row td { text-align: center; padding: 40px; color: var(--muted); }
+
+    /* ── Modal backdrop ── */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-backdrop.open { display: flex; }
+
+    /* ── Form modal ── */
+    #form-modal .modal-body {
+      background: var(--card); border-radius: 18px; border: 1px solid var(--border);
+      width: 100%; max-width: 700px; max-height: calc(100vh - 40px);
+      overflow-y: auto; padding: 28px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    }
+    .modal-title {
+      font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 22px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-close-btn {
+      background: rgba(0,0,0,0.07); border: none; color: var(--text);
+      width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 16px;
+    }
+
+    /* Form layout */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-grid .full { grid-column: 1 / -1; }
+
+    .field label {
+      display: block; font-size: 11px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px;
+    }
+    .field input, .field select, .field textarea {
+      width: 100%; background: #f8f9fa;
+      border: 1px solid var(--border); border-radius: 9px;
+      color: var(--text); font-size: 14px; padding: 9px 12px;
+      font-family: inherit; transition: border-color 0.15s;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus {
+      outline: none; border-color: var(--accent);
+    }
+    .field textarea { resize: vertical; min-height: 70px; }
+    select option { background: #ffffff; }
+
+    /* Coordinate row */
+    .coord-row { display: flex; gap: 8px; }
+    .coord-row input { flex: 1; }
+    .coord-row .get-loc-btn { flex-shrink: 0; white-space: nowrap; }
+
+    /* Map */
+    #coord-map {
+      width: 100%; height: 240px; border-radius: 10px;
+      border: 1px solid var(--border); margin-top: 8px;
+      overflow: hidden;
+    }
+    .map-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+    /* Tab switcher for descriptions */
+    .tab-bar { display: flex; gap: 4px; margin-bottom: 8px; }
+    .tab-btn {
+      padding: 5px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+      cursor: pointer; border: 1px solid var(--border);
+      background: transparent; color: var(--muted); transition: all 0.15s;
+    }
+    .tab-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .desc-tab { display: none; }
+    .desc-tab.active { display: block; }
+
+    .form-footer {
+      display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px;
+      padding-top: 18px; border-top: 1px solid var(--border);
+    }
+
+    /* ── Delete confirm modal ── */
+    #delete-modal .modal-body {
+      background: var(--card); border-radius: 18px; border: 1px solid var(--border);
+      width: 100%; max-width: 380px; padding: 28px; text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    }
+    #delete-modal h3 { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+    #delete-modal p  { color: var(--muted); font-size: 14px; line-height: 1.5; margin-bottom: 22px; }
+    #delete-modal .btn-row { display: flex; gap: 10px; justify-content: center; }
+
+    /* ── Tab navigation ── */
+    #tab-nav { display: flex; gap: 6px; margin-bottom: 22px; }
+    .tab-nav-btn {
+      padding: 8px 20px; border-radius: 10px; font-size: 14px; font-weight: 600;
+      cursor: pointer; border: 1px solid var(--border);
+      background: transparent; color: var(--muted); transition: all 0.15s;
+    }
+    .tab-nav-btn.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+    /* ── Analytics dashboard ── */
+    .a-refresh { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+    .a-updated { font-size: 12px; color: var(--muted); }
+    .a-cards {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 14px; margin-bottom: 20px;
+    }
+    .a-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 18px 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .a-card-val { font-size: 30px; font-weight: 800; color: var(--text); }
+    .a-card-key { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .a-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .a-section {
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 18px 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .a-section h3 { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 14px; }
+    /* Bar chart */
+    .bar-chart { display: flex; align-items: flex-end; gap: 3px; height: 100px; }
+    .bar-item  { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; }
+    .bar-fill  { width: 100%; background: var(--accent-dark); border-radius: 3px 3px 0 0; min-height: 2px; transition: height 0.3s; }
+    .bar-label { font-size: 8px; color: var(--muted); margin-top: 3px; }
+    .bar-num   { font-size: 9px; color: var(--muted); }
+    /* Spot ranking */
+    .rank-item { display: flex; align-items: center; gap: 10px; padding: 7px 0;
+                 border-bottom: 1px solid var(--border); }
+    .rank-item:last-child { border-bottom: none; }
+    .rank-num  { width: 22px; height: 22px; border-radius: 50%; background: var(--bg); color: var(--muted);
+                 font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .rank-gold { background: #fbbf24; color: #333; }
+    .rank-name { flex: 1; font-size: 13px; color: var(--text); font-weight: 600;
+                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rank-cnt  { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+    /* Lang bars */
+    .lang-row  { margin-bottom: 10px; }
+    .lang-meta { display: flex; justify-content: space-between; font-size: 12px;
+                 color: var(--muted); margin-bottom: 4px; }
+    .lang-track{ height: 7px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+    .lang-fill { height: 100%; border-radius: 4px; }
+    @media (max-width: 600px) { .a-row { grid-template-columns: 1fr; } }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+      background: #1a1a2e; color: #fff; padding: 10px 22px; border-radius: 30px;
+      font-size: 13px; font-weight: 600; z-index: 500;
+      transition: transform 0.25s ease; pointer-events: none;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── QR Modal ── */
+    #qr-modal .modal-body {
+      background: var(--card); border-radius: 18px; border: 1px solid var(--border);
+      width: 100%; max-width: 420px; padding: 28px; text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    }
+    #qr-canvas-wrap {
+      background: #fff; border-radius: 14px; display: inline-block;
+      padding: 10px; margin: 14px 0 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      border: 1px solid var(--border);
+    }
+    #qr-canvas { display: block; }
+    .qr-url {
+      font-size: 10px; color: var(--muted); word-break: break-all;
+      margin: 0 0 12px; font-family: monospace; line-height: 1.5;
+    }
+    .qr-status {
+      font-size: 12px; margin-top: 8px; min-height: 18px;
+    }
+    .qr-status.ok  { color: var(--success); }
+    .qr-status.err { color: var(--danger); }
+    .qr-status.tip { color: var(--muted); }
+    .qr-btn-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
+    /* Compile progress */
+    #compile-progress-wrap {
+      display: none; margin: 10px 0 4px;
+    }
+    .compile-track {
+      width: 100%; height: 5px; background: rgba(255,255,255,0.08);
+      border-radius: 3px; overflow: hidden; margin-bottom: 5px;
+    }
+    .compile-fill {
+      height: 100%; background: var(--accent); border-radius: 3px;
+      width: 0%; transition: width 0.25s ease;
+    }
+    .compile-label {
+      font-size: 11px; color: var(--muted); text-align: center;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .form-grid .full { grid-column: 1; }
+      #coord-map { height: 180px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">⛩ AR Admin</div>
+  <div class="header-actions">
+    <button class="btn btn-secondary btn-sm" onclick="exportJSON()">⬇ Export JSON</button>
+    <button class="btn btn-secondary btn-sm" onclick="importJSON()">⬆ Import JSON</button>
+    <a href="index.html" class="btn btn-primary btn-sm">▶ View AR</a>
+  </div>
+</header>
+
+<main>
+  <!-- ── Tab navigation ── -->
+  <div id="tab-nav">
+    <button class="tab-nav-btn active" data-tab="spots"     onclick="showTab('spots')">⛩ スポット</button>
+    <button class="tab-nav-btn"        data-tab="analytics" onclick="showTab('analytics')">📊 分析</button>
+  </div>
+
+  <!-- ── Spots tab ── -->
+  <div id="tab-spots">
+    <div class="section-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <h2>Spots</h2>
+        <span class="badge" id="spot-count">0</span>
+      </div>
+      <button class="btn btn-primary" onclick="openAddForm()">＋ Add Spot</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>名前</th>
+            <th>Category</th>
+            <th>Coordinates</th>
+            <th>Radius</th>
+            <th>説明 (JP)</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="spots-tbody">
+          <tr class="empty-row"><td colspan="6">No spots yet. Click "Add Spot" to create one.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Analytics tab ── -->
+  <div id="tab-analytics" style="display:none">
+    <div class="a-refresh">
+      <button class="btn btn-secondary btn-sm" onclick="loadAnalytics()">🔄 更新</button>
+      <span class="a-updated" id="a-updated"></span>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="a-cards">
+      <div class="a-card"><div class="a-card-val" id="a-today">—</div><div class="a-card-key">今日のセッション</div></div>
+      <div class="a-card"><div class="a-card-val" id="a-total">—</div><div class="a-card-key">総セッション数</div></div>
+      <div class="a-card"><div class="a-card-val" id="a-events">—</div><div class="a-card-key">総イベント数</div></div>
+      <div class="a-card"><div class="a-card-val" id="a-avgdur">—</div><div class="a-card-key">平均滞在時間</div></div>
+    </div>
+
+    <!-- Spot ranking + Language -->
+    <div class="a-row">
+      <div class="a-section">
+        <h3>人気スポットランキング</h3>
+        <div id="a-ranking"></div>
+      </div>
+      <div class="a-section">
+        <h3>使用言語</h3>
+        <div id="a-lang"></div>
+      </div>
+    </div>
+
+    <!-- Hourly chart -->
+    <div class="a-section">
+      <h3>時間帯別セッション数（0〜23時）</h3>
+      <div class="bar-chart" id="a-hourly"></div>
+    </div>
+
+    <!-- Session list -->
+    <div class="a-section">
+      <h3>セッション一覧（直近30件）<span class="badge" id="a-session-count" style="margin-left:8px">0</span></h3>
+      <div class="table-wrap" style="margin-top:10px">
+        <table>
+          <thead>
+            <tr>
+              <th>開始日時</th>
+              <th>滞在時間</th>
+              <th>言語</th>
+              <th>イベント数</th>
+              <th>訪問スポット数</th>
+            </tr>
+          </thead>
+          <tbody id="a-sessions-tbody">
+            <tr class="empty-row"><td colspan="5">データなし</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ── Add / Edit Form Modal ── -->
+<div class="modal-backdrop" id="form-modal">
+  <div class="modal-body">
+    <div class="modal-title">
+      <span id="form-title">Add Spot</span>
+      <button class="modal-close-btn" onclick="closeFormModal()">✕</button>
+    </div>
+
+    <form id="spot-form" onsubmit="handleFormSubmit(event)">
+      <input type="hidden" id="f-id">
+
+      <div class="form-grid">
+        <!-- Name per language -->
+        <div class="field full">
+          <label>Name</label>
+          <div class="tab-bar">
+            <button type="button" class="tab-btn" data-ntab="en" onclick="switchNameTab('en')">EN</button>
+            <button type="button" class="tab-btn active" data-ntab="jp" onclick="switchNameTab('jp')">JP</button>
+            <button type="button" class="tab-btn" data-ntab="zh" onclick="switchNameTab('zh')">ZH</button>
+          </div>
+          <div class="desc-tab" id="ntab-en"><input id="f-name-en" placeholder="English name" required></div>
+          <div class="desc-tab active" id="ntab-jp"><input id="f-name-jp" placeholder="日本語名称"></div>
+          <div class="desc-tab" id="ntab-zh"><input id="f-name-zh" placeholder="中文名称"></div>
+        </div>
+
+        <!-- Category & Radius -->
+        <div class="field">
+          <label>Category</label>
+          <select id="f-category">
+            <option value="heritage">🏯 歴史文化</option>
+            <option value="nature">🌿 自然景観</option>
+            <option value="facility">🚌 公共施設</option>
+            <option value="shop">🛍️ お店</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Detection Radius (m)</label>
+          <input type="number" id="f-radius" value="50" min="5" max="1000" required>
+        </div>
+
+        <!-- Coordinates -->
+        <div class="field full">
+          <label>Coordinates</label>
+          <div class="coord-row">
+            <input type="number" id="f-lat" placeholder="Latitude" step="any" required>
+            <input type="number" id="f-lng" placeholder="Longitude" step="any" required>
+            <button type="button" class="btn btn-secondary btn-sm get-loc-btn" onclick="useCurrentLocation()">
+              ⌖ My Location
+            </button>
+          </div>
+          <div id="coord-map"></div>
+          <p class="map-hint">Click the map to set coordinates, or enter manually above.</p>
+        </div>
+
+        <!-- Descriptions -->
+        <div class="field full">
+          <label>Description</label>
+          <div class="tab-bar">
+            <button type="button" class="tab-btn" data-dtab="en" onclick="switchDescTab('en')">EN</button>
+            <button type="button" class="tab-btn active" data-dtab="jp" onclick="switchDescTab('jp')">JP</button>
+            <button type="button" class="tab-btn" data-dtab="zh" onclick="switchDescTab('zh')">ZH</button>
+          </div>
+          <div class="desc-tab" id="dtab-en"><textarea id="f-desc-en" placeholder="English description" required></textarea></div>
+          <div class="desc-tab active" id="dtab-jp"><textarea id="f-desc-jp" placeholder="日本語説明"></textarea></div>
+          <div class="desc-tab" id="dtab-zh"><textarea id="f-desc-zh" placeholder="中文描述"></textarea></div>
+        </div>
+      </div>
+
+      <div class="form-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeFormModal()">Cancel</button>
+        <button type="submit" class="btn btn-success" id="save-btn">Save Spot</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Delete Confirm Modal ── -->
+<div class="modal-backdrop" id="delete-modal">
+  <div class="modal-body">
+    <h3>Delete Spot</h3>
+    <p id="delete-msg">Are you sure you want to delete this spot? This cannot be undone.</p>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn btn-danger" id="confirm-delete-btn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── QR / AR Marker Modal ── -->
+<div class="modal-backdrop" id="qr-modal">
+  <div class="modal-body">
+    <div class="modal-title">
+      <span id="qr-modal-title">AR Marker</span>
+      <button class="modal-close-btn" onclick="closeQRModal()">✕</button>
+    </div>
+
+    <!-- Preview canvas (shows QR first, then composite marker) -->
+    <div id="qr-canvas-wrap">
+      <canvas id="qr-canvas" width="260" height="260"></canvas>
+    </div>
+    <!-- Hidden off-screen canvases used for generation only -->
+    <canvas id="qr-raw-canvas"     style="display:none"></canvas>
+    <canvas id="marker-canvas"     style="display:none"></canvas>
+
+    <p class="qr-url" id="qr-url-display"></p>
+
+    <!-- Compile progress bar -->
+    <div id="compile-progress-wrap">
+      <div class="compile-track"><div class="compile-fill" id="compile-fill"></div></div>
+      <div class="compile-label" id="compile-label">Compiling…</div>
+    </div>
+
+    <div class="qr-btn-row">
+      <button class="btn btn-success btn-sm" id="qr-compile-btn" onclick="compileAndSaveAR()">
+        🔮 Compile AR Target
+      </button>
+      <button class="btn btn-secondary btn-sm" id="qr-print-btn"
+              onclick="printMarker()" style="display:none">🖨 Print Marker</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeQRModal()">Close</button>
+    </div>
+    <p class="qr-status tip" id="qr-status"></p>
+  </div>
+</div>
+
+<!-- ── Hidden file input for import ── -->
+<input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
+
+<!-- ── Toast ── -->
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────────────
+//  Data management  (server-side spots.json via PUT)
+// ─────────────────────────────────────────────────────────
+let spots = [];
+
+async function loadSpots() {
+  try {
+    const r = await fetch('spots.json');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    spots = await r.json();
+  } catch(e) {
+    console.warn('Could not load spots.json:', e);
+    spots = [];
+  }
+}
+
+async function saveSpots() {
+  const r = await fetch('spots.json', {
+    method:  'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(spots, null, 2)
+  });
+  if (!r.ok) {
+    const { error } = await r.json().catch(() => ({}));
+    throw new Error(error || `HTTP ${r.status}`);
+  }
+}
+
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+// ─────────────────────────────────────────────────────────
+//  Table render
+// ─────────────────────────────────────────────────────────
+const CAT_COLORS = { heritage:'heritage', nature:'nature', facility:'facility', shop:'shop' };
+
+function renderTable() {
+  document.getElementById('spot-count').textContent = spots.length;
+  const tbody = document.getElementById('spots-tbody');
+
+  if (spots.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No spots yet. Click "Add Spot" to create one.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = spots.map(s => {
+    const name = s.name.jp || s.name.en || Object.values(s.name)[0] || '';
+    const desc = (s.description.jp || s.description.en || Object.values(s.description)[0] || '').slice(0, 80);
+    const cat  = s.category || 'gate';
+    return `
+    <tr>
+      <td class="name-cell"><span class="ellipsis" style="max-width:160px">${esc(name)}</span></td>
+      <td><span class="cat-badge ${CAT_COLORS[cat] || ''}">${esc(cat)}</span></td>
+      <td class="coord">${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}</td>
+      <td>${s.radius || 50}m</td>
+      <td class="desc-cell"><span class="ellipsis">${esc(desc)}${desc.length >= 80 ? '…' : ''}</span></td>
+      <td class="actions-cell">
+        <button class="btn btn-secondary btn-sm" onclick="openEditForm('${s.id}')">Edit</button>
+        <button class="btn btn-sm ${s.hasQR ? 'btn-primary' : 'btn-secondary'}" onclick="openQRModal('${s.id}')" title="${s.hasQR ? 'QR generated — click to view/reprint' : 'Generate AR QR code'}">
+          📱 ${s.hasQR ? 'QR ✓' : 'QR'}
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="askDelete('${s.id}')">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─────────────────────────────────────────────────────────
+//  Map (Leaflet)
+// ─────────────────────────────────────────────────────────
+let mapInstance = null;
+let mapMarker   = null;
+const MAP_CENTER = [38.3165, 140.4493]; // Yamadera default
+
+function initMap() {
+  if (mapInstance) return;
+  mapInstance = L.map('coord-map').setView(MAP_CENTER, 16);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 19
+  }).addTo(mapInstance);
+  mapInstance.on('click', e => {
+    document.getElementById('f-lat').value = e.latlng.lat.toFixed(7);
+    document.getElementById('f-lng').value = e.latlng.lng.toFixed(7);
+    placeMapMarker(e.latlng.lat, e.latlng.lng);
+  });
+}
+
+function placeMapMarker(lat, lng) {
+  if (mapMarker) mapInstance.removeLayer(mapMarker);
+  mapMarker = L.marker([lat, lng]).addTo(mapInstance);
+  mapInstance.setView([lat, lng], mapInstance.getZoom());
+}
+
+function syncMapFromForm() {
+  const lat = parseFloat(document.getElementById('f-lat').value);
+  const lng = parseFloat(document.getElementById('f-lng').value);
+  if (!isNaN(lat) && !isNaN(lng)) placeMapMarker(lat, lng);
+}
+
+document.getElementById('f-lat').addEventListener('change', syncMapFromForm);
+document.getElementById('f-lng').addEventListener('change', syncMapFromForm);
+
+function useCurrentLocation() {
+  if (!navigator.geolocation) { showToast('Geolocation not available'); return; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    document.getElementById('f-lat').value = pos.coords.latitude.toFixed(7);
+    document.getElementById('f-lng').value = pos.coords.longitude.toFixed(7);
+    placeMapMarker(pos.coords.latitude, pos.coords.longitude);
+  }, () => showToast('Could not get location'));
+}
+
+// ─────────────────────────────────────────────────────────
+//  Form open / close
+// ─────────────────────────────────────────────────────────
+function openAddForm() {
+  document.getElementById('form-title').textContent = 'Add Spot';
+  document.getElementById('save-btn').textContent   = 'Save Spot';
+  document.getElementById('spot-form').reset();
+  document.getElementById('f-id').value = '';
+  document.getElementById('f-radius').value = '50';
+  switchDescTab('jp');
+  switchNameTab('jp');
+  document.getElementById('form-modal').classList.add('open');
+  // Init map after modal is visible
+  requestAnimationFrame(() => {
+    initMap();
+    if (mapMarker) { mapInstance.removeLayer(mapMarker); mapMarker = null; }
+    mapInstance.setView(MAP_CENTER, 16);
+    // Force map to recalculate size
+    setTimeout(() => mapInstance.invalidateSize(), 100);
+  });
+}
+
+function openEditForm(id) {
+  const spot = spots.find(s => s.id === id);
+  if (!spot) return;
+
+  document.getElementById('form-title').textContent = 'Edit Spot';
+  document.getElementById('save-btn').textContent   = 'Update Spot';
+  document.getElementById('f-id').value       = spot.id;
+  document.getElementById('f-name-en').value  = spot.name.en || '';
+  document.getElementById('f-name-jp').value  = spot.name.jp || '';
+  document.getElementById('f-name-zh').value  = spot.name.zh || '';
+  document.getElementById('f-category').value = spot.category || 'heritage';
+  document.getElementById('f-radius').value   = spot.radius || 50;
+  document.getElementById('f-lat').value      = spot.lat;
+  document.getElementById('f-lng').value      = spot.lng;
+  document.getElementById('f-desc-en').value  = spot.description.en || '';
+  document.getElementById('f-desc-jp').value  = spot.description.jp || '';
+  document.getElementById('f-desc-zh').value  = spot.description.zh || '';
+  switchDescTab('jp');
+  switchNameTab('jp');
+  document.getElementById('form-modal').classList.add('open');
+  requestAnimationFrame(() => {
+    initMap();
+    placeMapMarker(spot.lat, spot.lng);
+    setTimeout(() => mapInstance.invalidateSize(), 100);
+  });
+}
+
+function closeFormModal() {
+  document.getElementById('form-modal').classList.remove('open');
+}
+
+// Close on backdrop click
+document.getElementById('form-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('form-modal')) closeFormModal();
+});
+
+// ─────────────────────────────────────────────────────────
+//  Tabs
+// ─────────────────────────────────────────────────────────
+function switchDescTab(lang) {
+  document.querySelectorAll('.desc-tab[id^="dtab-"]').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('[data-dtab]').forEach(b  => b.classList.remove('active'));
+  document.getElementById(`dtab-${lang}`).classList.add('active');
+  document.querySelector(`[data-dtab="${lang}"]`).classList.add('active');
+}
+
+function switchNameTab(lang) {
+  document.querySelectorAll('.desc-tab[id^="ntab-"]').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('[data-ntab]').forEach(b  => b.classList.remove('active'));
+  document.getElementById(`ntab-${lang}`).classList.add('active');
+  document.querySelector(`[data-ntab="${lang}"]`).classList.add('active');
+}
+
+// ─────────────────────────────────────────────────────────
+//  Form submit
+// ─────────────────────────────────────────────────────────
+async function handleFormSubmit(e) {
+  e.preventDefault();
+
+  const lat = parseFloat(document.getElementById('f-lat').value);
+  const lng = parseFloat(document.getElementById('f-lng').value);
+  if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    showToast('Invalid coordinates');
+    return;
+  }
+
+  const nameEn = document.getElementById('f-name-en').value.trim();
+  if (!nameEn) { showToast('English name is required'); return; }
+
+  const spot = {
+    id:       document.getElementById('f-id').value || genId(),
+    category: document.getElementById('f-category').value,
+    lat, lng,
+    radius:   parseInt(document.getElementById('f-radius').value, 10) || 50,
+    name: {
+      en: nameEn,
+      jp: document.getElementById('f-name-jp').value.trim() || nameEn,
+      zh: document.getElementById('f-name-zh').value.trim() || nameEn
+    },
+    description: {
+      en: document.getElementById('f-desc-en').value.trim(),
+      jp: document.getElementById('f-desc-jp').value.trim() || document.getElementById('f-desc-en').value.trim(),
+      zh: document.getElementById('f-desc-zh').value.trim() || document.getElementById('f-desc-en').value.trim()
+    }
+  };
+
+  const existing = spots.findIndex(s => s.id === spot.id);
+  const isNew    = existing < 0;
+  if (isNew) spots.push(spot);
+  else        spots[existing] = spot;
+
+  const saveBtn = document.getElementById('save-btn');
+  saveBtn.disabled    = true;
+  saveBtn.textContent = 'Saving…';
+  try {
+    await saveSpots();
+    showToast(isNew ? 'Spot added' : 'Spot updated');
+    renderTable();
+    closeFormModal();
+  } catch(e) {
+    showToast('Save failed: ' + e.message);
+    // rollback in-memory change
+    if (isNew) spots.pop();
+    else        spots[existing] = spot; // spot is unchanged (was the existing version already)
+  } finally {
+    saveBtn.disabled    = false;
+    saveBtn.textContent = 'Save Spot';
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Delete
+// ─────────────────────────────────────────────────────────
+let pendingDeleteId = null;
+
+function askDelete(id) {
+  const spot = spots.find(s => s.id === id);
+  if (!spot) return;
+  pendingDeleteId = id;
+  document.getElementById('delete-msg').textContent =
+    `Delete "${spot.name.en || id}"? This cannot be undone.`;
+  document.getElementById('delete-modal').classList.add('open');
+}
+
+function closeDeleteModal() {
+  document.getElementById('delete-modal').classList.remove('open');
+  pendingDeleteId = null;
+}
+
+document.getElementById('confirm-delete-btn').addEventListener('click', async () => {
+  if (!pendingDeleteId) return;
+  const btn     = document.getElementById('confirm-delete-btn');
+  const removed = spots.find(s => s.id === pendingDeleteId);
+  spots = spots.filter(s => s.id !== pendingDeleteId);
+  btn.disabled    = true;
+  btn.textContent = 'Deleting…';
+  try {
+    await saveSpots();
+    showToast('Spot deleted');
+    renderTable();
+    closeDeleteModal();
+  } catch(e) {
+    spots.push(removed); // rollback
+    showToast('Delete failed: ' + e.message);
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Delete';
+  }
+});
+
+document.getElementById('delete-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('delete-modal')) closeDeleteModal();
+});
+
+// ─────────────────────────────────────────────────────────
+//  Export / Import
+// ─────────────────────────────────────────────────────────
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(spots, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'spots.json'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('Exported spots.json');
+}
+
+function importJSON() {
+  document.getElementById('import-file').value = '';
+  document.getElementById('import-file').click();
+}
+
+function handleImport(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!Array.isArray(data)) throw new Error('Not an array');
+      spots = data;
+      await saveSpots();
+      renderTable();
+      showToast(`Imported ${data.length} spots`);
+    } catch(err) {
+      showToast('Import failed: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ─────────────────────────────────────────────────────────
+//  Toast
+// ─────────────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ─────────────────────────────────────────────────────────
+//  QR Code & AR Marker: generation, compilation, printing
+// ─────────────────────────────────────────────────────────
+let activeQRSpotId = null;
+
+// ── Helpers ──────────────────────────────────────────────
+function setQRStatus(msg, cls = 'tip') {
+  const el = document.getElementById('qr-status');
+  el.textContent = msg;
+  el.className   = `qr-status ${cls}`;
+}
+
+function setCompileProgress(pct, label) {
+  document.getElementById('compile-progress-wrap').style.display = pct >= 0 ? '' : 'none';
+  if (pct >= 0) {
+    document.getElementById('compile-fill').style.width  = pct + '%';
+    document.getElementById('compile-label').textContent = label;
+  }
+}
+
+function closeQRModal() {
+  document.getElementById('qr-modal').classList.remove('open');
+  activeQRSpotId = null;
+  setCompileProgress(-1, '');
+}
+document.getElementById('qr-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('qr-modal')) closeQRModal();
+});
+
+// ── Draw QR code onto any canvas (qrcode-generator, synchronous) ──
+function drawQRToCanvas(canvas, text, size) {
+  const qr = qrcode(0, 'H');
+  qr.addData(text);
+  qr.make();
+  const cells    = qr.getModuleCount();
+  const cellSize = Math.floor(size / (cells + 8));
+  const offset   = Math.floor((size - cells * cellSize) / 2);
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = '#000';
+  for (let r = 0; r < cells; r++)
+    for (let c = 0; c < cells; c++)
+      if (qr.isDark(r, c))
+        ctx.fillRect(offset + c * cellSize, offset + r * cellSize, cellSize, cellSize);
+}
+
+// ── Build composite marker canvas (512×512) ───────────────
+const CAT_COLOR = { heritage:'#b45309', nature:'#047857', facility:'#1d4ed8', shop:'#be185d', default:'#6b7280' };
+const CAT_LIGHT = { heritage:'#fef3c7', nature:'#d1fae5', facility:'#dbeafe', shop:'#fce7f3', default:'#f3f4f6' };
+const CAT_CHAR  = { heritage:'H', nature:'N', facility:'F', shop:'S', default:'*' };
+
+function buildMarkerCanvas(spot, qrRawCanvas) {
+  const S   = 512;
+  const c   = document.createElement('canvas');
+  c.width = c.height = S;
+  const ctx = c.getContext('2d');
+
+  const col  = CAT_COLOR[spot.category] || CAT_COLOR.default;
+  const lite = CAT_LIGHT[spot.category] || CAT_LIGHT.default;
+  const chr  = CAT_CHAR[spot.category]  || CAT_CHAR.default;
+  const name = (spot.name.en || '').slice(0, 28);
+  const bw   = 12;   // border width
+  const hH   = 110;  // header height
+  const fH   = 58;   // footer height
+
+  // White base
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, S, S);
+
+  // Light body tint
+  ctx.fillStyle = lite; ctx.fillRect(bw, hH, S - 2*bw, S - hH - fH - bw);
+
+  // Header band
+  ctx.fillStyle = col; ctx.fillRect(0, 0, S, hH);
+
+  // Header letter icon (large, left)
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.font = 'bold 90px monospace';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(chr, 14, hH / 2);
+
+  // Header: spot name (right side, white, bold)
+  ctx.fillStyle = '#fff';
+  let fs = 34;
+  ctx.font = `bold ${fs}px sans-serif`;
+  while (ctx.measureText(name).width > S - 110 && fs > 14) {
+    fs -= 2; ctx.font = `bold ${fs}px sans-serif`;
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(name, (S + 90) / 2, hH / 2 - 2, S - 104);
+
+  // Subtext: category
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.font = `600 16px sans-serif`;
+  ctx.fillText((spot.category || 'SPOT').toUpperCase(), (S + 90) / 2, hH / 2 + 26);
+
+  // QR code (centered in body, with white pad)
+  const bodyH  = S - hH - fH;
+  const qrPad  = 18;
+  const qrSize = bodyH - qrPad * 2;
+  const qrX    = Math.round((S - qrSize) / 2);
+  const qrY    = hH + qrPad;
+
+  ctx.shadowColor = 'rgba(0,0,0,0.15)'; ctx.shadowBlur = 10;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(qrX - 6, qrY - 6, qrSize + 12, qrSize + 12);
+  ctx.shadowBlur = 0;
+  ctx.drawImage(qrRawCanvas, qrX, qrY, qrSize, qrSize);
+
+  // Four corner feature circles (help MindAR.js find keypoints at corners)
+  const dr = 14, dm = 22;
+  ctx.fillStyle = col;
+  [[dm, hH + dm], [S - dm, hH + dm], [dm, S - fH - dm], [S - dm, S - fH - dm]]
+    .forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, dr, 0, Math.PI*2); ctx.fill(); });
+
+  // Crosshair lines connecting corner circles (extra keypoint-rich features)
+  ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.globalAlpha = 0.25;
+  ctx.beginPath(); ctx.moveTo(dm, hH + dm); ctx.lineTo(S - dm, hH + dm); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(dm, S - fH - dm); ctx.lineTo(S - dm, S - fH - dm); ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // Footer band
+  ctx.fillStyle = col; ctx.fillRect(0, S - fH, S, fH);
+  ctx.fillStyle = '#fff'; ctx.font = '15px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('⛩ Yamadera AR  —  scan QR code to open AR', S / 2, S - fH / 2, S - 24);
+
+  // Outer border
+  ctx.strokeStyle = col; ctx.lineWidth = bw;
+  ctx.strokeRect(bw/2, bw/2, S - bw, S - bw);
+
+  return c;
+}
+
+// ── Open QR modal ─────────────────────────────────────────
+async function openQRModal(spotId) {
+  activeQRSpotId = spotId;
+  const spot = spots.find(s => s.id === spotId);
+  if (!spot) return;
+
+  const arUrl = `${window.location.origin}/ar-marker.html?id=${spotId}`;
+  document.getElementById('qr-modal-title').textContent = spot.name.en || spotId;
+  document.getElementById('qr-url-display').textContent = arUrl;
+  document.getElementById('qr-compile-btn').textContent =
+    spot.hasAR ? '🔄 Re-compile AR Target' : '🔮 Compile AR Target';
+  document.getElementById('qr-print-btn').style.display  = spot.hasAR ? '' : 'none';
+  setCompileProgress(-1, '');
+  document.getElementById('qr-modal').classList.add('open');
+
+  // Draw QR preview (bare QR, shown until marker is built)
+  try {
+    drawQRToCanvas(document.getElementById('qr-canvas'), arUrl, 260);
+    setQRStatus(
+      spot.hasAR
+        ? '✓ AR compiled — click "Print Marker" to reprint, or re-compile to update.'
+        : 'Click "Compile AR Target" to enable AR tracking (takes ~20s on first run).',
+      spot.hasAR ? 'ok' : 'tip'
+    );
+  } catch(e) {
+    setQRStatus('QR generation failed: ' + e.message, 'err');
+  }
+}
+
+// ── Load MindAR.js Compiler on demand via ES Module import() ─
+// mindar-image.prod.js@1.2.5 is a Vite-built ES Module.
+// A plain <script> tag cannot process its import statements —
+// dynamic import() is the correct loader and handles chunk files automatically.
+async function ensureMindAR() {
+  if (window.MINDAR?.IMAGE?.Compiler) return;
+  setQRStatus('Loading MindAR.js…', 'tip');
+  setCompileProgress(0, 'Loading MindAR.js…');
+  const MINDAR_URL = 'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js';
+  let mod;
+  try {
+    mod = await import(/* @vite-ignore */ MINDAR_URL);
+  } catch(e) {
+    throw new Error('Failed to import MindAR.js: ' + e.message);
+  }
+  // The module sets window.MINDAR.IMAGE AND exports named bindings.
+  // Ensure Compiler is reachable via window for the rest of compileAndSaveAR.
+  if (mod?.Compiler) {
+    window.MINDAR         = window.MINDAR        || {};
+    window.MINDAR.IMAGE   = window.MINDAR.IMAGE  || {};
+    window.MINDAR.IMAGE.Compiler = mod.Compiler;
+  }
+  if (!window.MINDAR?.IMAGE?.Compiler) {
+    throw new Error(
+      'MINDAR.IMAGE.Compiler could not be initialized.\n' +
+      'MINDAR.IMAGE keys: ' + Object.keys(window.MINDAR?.IMAGE || {}).join(', ')
+    );
+  }
+}
+
+// ── Compile marker + save .mind + save PNG ────────────────
+async function compileAndSaveAR() {
+  if (!activeQRSpotId) return;
+  const spot   = spots.find(s => s.id === activeQRSpotId);
+  if (!spot) return;
+  const btn    = document.getElementById('qr-compile-btn');
+  btn.disabled = true;
+
+  try {
+    // 1. Load MindAR.js (lazy)
+    await ensureMindAR();
+
+    // 2. Build raw QR and composite marker canvases
+    setQRStatus('Building marker image…', 'tip');
+    setCompileProgress(2, 'Building marker…');
+    const arUrl    = document.getElementById('qr-url-display').textContent;
+    const qrRaw    = document.getElementById('qr-raw-canvas');
+    drawQRToCanvas(qrRaw, arUrl, 400); // larger raw QR for better features
+
+    const markerC  = buildMarkerCanvas(spot, qrRaw);
+    document.getElementById('marker-canvas').width  = markerC.width;
+    document.getElementById('marker-canvas').height = markerC.height;
+    document.getElementById('marker-canvas').getContext('2d')
+      .drawImage(markerC, 0, 0);
+
+    // Show marker preview in QR canvas slot (scaled)
+    const prev = document.getElementById('qr-canvas');
+    prev.width = prev.height = 260;
+    prev.getContext('2d').drawImage(markerC, 0, 0, 260, 260);
+
+    // 3. Convert marker to HTMLImageElement for compiler
+    const markerImg = await new Promise((res, rej) => {
+      const img = new Image();
+      img.onload  = () => res(img);
+      img.onerror = () => rej(new Error('Marker image load failed'));
+      img.src     = markerC.toDataURL('image/png');
+    });
+
+    // 4. Compile with MindAR.js Compiler
+    setQRStatus('Compiling AR target… (20–60 s on first run)', 'tip');
+    setCompileProgress(5, 'Extracting features…');
+    const compiler = new window.MINDAR.IMAGE.Compiler();
+    await compiler.compileImageTargets([markerImg], pct => {
+      const p = Math.round(pct * 90) + 5;
+      setCompileProgress(p, `Compiling… ${p}%`);
+    });
+    const buffer = await compiler.exportData();
+
+    // 5. PUT /compiled/<id>.mind
+    setCompileProgress(96, 'Saving compiled data…');
+    const mindR = await fetch(`/compiled/${activeQRSpotId}.mind`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' },
+      body:   new Blob([buffer])
+    });
+    if (!mindR.ok) throw new Error((await mindR.json().catch(() => ({}))).error || `HTTP ${mindR.status}`);
+
+    // 6. PUT /qr/<id>.png  (marker image, used for printing)
+    setCompileProgress(98, 'Saving marker image…');
+    const pngBlob = await new Promise((res, rej) =>
+      markerC.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/png')
+    );
+    const pngR = await fetch(`/qr/${activeQRSpotId}.png`, {
+      method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: pngBlob
+    });
+    if (!pngR.ok) throw new Error((await pngR.json().catch(() => ({}))).error || `HTTP ${pngR.status}`);
+
+    // 7. Update spot metadata
+    spot.hasQR = true;
+    spot.hasAR = true;
+    spot.arUrl = arUrl;
+    await saveSpots();
+    renderTable();
+
+    setCompileProgress(100, 'Done');
+    setQRStatus('✓ AR target compiled and saved! Click "Print Marker" to print.', 'ok');
+    document.getElementById('qr-print-btn').style.display = '';
+    document.getElementById('qr-compile-btn').textContent = '🔄 Re-compile AR Target';
+    showToast('AR target compiled ✓');
+
+  } catch(e) {
+    console.error(e);
+    setQRStatus('Compilation failed: ' + e.message, 'err');
+    setCompileProgress(-1, '');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Print composite marker ────────────────────────────────
+function printMarker() {
+  if (!activeQRSpotId) return;
+  const spot  = spots.find(s => s.id === activeQRSpotId);
+  if (!spot) return;
+
+  // Use the marker canvas if available, otherwise fall back to QR canvas
+  const mc    = document.getElementById('marker-canvas');
+  const src   = (mc.width > 0)
+    ? mc.toDataURL('image/png')
+    : document.getElementById('qr-canvas').toDataURL('image/png');
+  const name  = esc(spot.name.en || activeQRSpotId);
+  const arUrl = esc(document.getElementById('qr-url-display').textContent);
+
+  const win = window.open('', '_blank', 'width=560,height=640');
+  win.document.write(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>AR Marker – ${name}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,sans-serif;display:flex;align-items:center;
+       justify-content:center;min-height:100vh;background:#f5f5f5}
+  .wrap{background:#fff;border-radius:16px;padding:24px;text-align:center;
+        box-shadow:0 4px 24px rgba(0,0,0,.12);max-width:380px}
+  img{display:block;width:320px;height:320px;margin:0 auto 14px;border-radius:8px}
+  .url{font-size:8px;color:#999;word-break:break-all;font-family:monospace;margin-top:8px}
+  @media print{body{background:#fff}.wrap{box-shadow:none}}
+</style></head>
+<body><div class="wrap">
+  <img src="${src}" alt="AR Marker">
+  <div class="url">${arUrl}</div>
+</div>
+<script>window.addEventListener('load',()=>setTimeout(()=>window.print(),200))<\/script>
+</body></html>`);
+  win.document.close();
+}
+
+// ─────────────────────────────────────────────────────────
+//  Tab switching
+// ─────────────────────────────────────────────────────────
+function showTab(tab) {
+  document.querySelectorAll('.tab-nav-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tab)
+  );
+  document.getElementById('tab-spots').style.display     = tab === 'spots'     ? '' : 'none';
+  document.getElementById('tab-analytics').style.display = tab === 'analytics' ? '' : 'none';
+  if (tab === 'analytics') loadAnalytics();
+}
+
+// ─────────────────────────────────────────────────────────
+//  Analytics dashboard
+// ─────────────────────────────────────────────────────────
+function fmtDur(secs) {
+  if (!secs || secs <= 0) return '—';
+  if (secs < 60) return `${secs}秒`;
+  const m = Math.floor(secs / 60), s = secs % 60;
+  return s ? `${m}分${s}秒` : `${m}分`;
+}
+
+async function loadAnalytics() {
+  try {
+    const r = await fetch('/analytics');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    renderAnalytics(Array.isArray(data) ? data : []);
+    document.getElementById('a-updated').textContent =
+      '更新: ' + new Date().toLocaleTimeString('ja-JP');
+  } catch(e) {
+    document.getElementById('a-updated').textContent = '読み込み失敗: ' + e.message;
+  }
+}
+
+function renderAnalytics(sessions) {
+  const today      = new Date().toDateString();
+  const todayCount = sessions.filter(s => new Date(s.startTime).toDateString() === today).length;
+  const allEvents  = sessions.flatMap(s => s.events || []);
+
+  // Summary cards
+  document.getElementById('a-today').textContent  = todayCount;
+  document.getElementById('a-total').textContent  = sessions.length;
+  document.getElementById('a-events').textContent = allEvents.length;
+  const durs = sessions.filter(s => s.startTime && s.endTime)
+    .map(s => Math.round((new Date(s.endTime) - new Date(s.startTime)) / 1000));
+  const avgDur = durs.length ? Math.round(durs.reduce((a,b) => a+b,0) / durs.length) : 0;
+  document.getElementById('a-avgdur').textContent = fmtDur(avgDur);
+
+  // Spot ranking (by total interactions)
+  const spotCnt = {};
+  allEvents.filter(e => ['bubble_tap','chip_tap','modal_view','spot_approach'].includes(e.type))
+    .forEach(e => { spotCnt[e.spotId] = (spotCnt[e.spotId] || 0) + 1; });
+  const ranking = Object.entries(spotCnt).sort(([,a],[,b]) => b - a).slice(0, 8);
+  const rankEl  = document.getElementById('a-ranking');
+  rankEl.innerHTML = ranking.length
+    ? ranking.map(([sid, cnt], i) => {
+        const sp   = spots.find(x => x.id === sid);
+        const name = sp ? (sp.name.jp || sp.name.en) : sid;
+        return `<div class="rank-item">
+          <div class="rank-num ${i < 3 ? 'rank-gold' : ''}">${i+1}</div>
+          <div class="rank-name">${esc(name)}</div>
+          <div class="rank-cnt">${cnt}回</div>
+        </div>`;
+      }).join('')
+    : '<p style="color:var(--muted);font-size:13px">データなし</p>';
+
+  // Language distribution
+  const langCnt = {};
+  sessions.forEach(s => { langCnt[s.lang || 'en'] = (langCnt[s.lang || 'en'] || 0) + 1; });
+  const total = sessions.length || 1;
+  const LC = { en:'#3b82f6', jp:'#10b981', zh:'#f59e0b' };
+  const LN = { en:'English', jp:'日本語', zh:'中文' };
+  document.getElementById('a-lang').innerHTML = Object.entries(langCnt)
+    .sort(([,a],[,b]) => b - a)
+    .map(([l, n]) => {
+      const pct = Math.round(n / total * 100);
+      return `<div class="lang-row">
+        <div class="lang-meta"><span>${LN[l]||l}</span><span>${n}件 (${pct}%)</span></div>
+        <div class="lang-track">
+          <div class="lang-fill" style="width:${pct}%;background:${LC[l]||'#6b7280'}"></div>
+        </div>
+      </div>`;
+    }).join('') || '<p style="color:var(--muted);font-size:13px">データなし</p>';
+
+  // Hourly bar chart
+  const hourly = new Array(24).fill(0);
+  sessions.forEach(s => { if (s.startTime) hourly[new Date(s.startTime).getHours()]++; });
+  const maxH = Math.max(...hourly, 1);
+  document.getElementById('a-hourly').innerHTML = hourly.map((n, h) => `
+    <div class="bar-item">
+      <div class="bar-num">${n || ''}</div>
+      <div class="bar-fill" style="height:${Math.round(n / maxH * 80)}px"></div>
+      <div class="bar-label">${h}</div>
+    </div>`).join('');
+
+  // Sessions table (latest 30, newest first)
+  document.getElementById('a-session-count').textContent = sessions.length;
+  const recent = [...sessions].reverse().slice(0, 30);
+  const tbody  = document.getElementById('a-sessions-tbody');
+  tbody.innerHTML = recent.length
+    ? recent.map(s => {
+        const secs    = s.startTime && s.endTime
+          ? Math.round((new Date(s.endTime) - new Date(s.startTime)) / 1000) : 0;
+        const evts    = s.events || [];
+        const visited = new Set(evts.filter(e => e.spotId).map(e => e.spotId)).size;
+        return `<tr>
+          <td>${new Date(s.startTime).toLocaleString('ja-JP')}</td>
+          <td>${fmtDur(secs)}</td>
+          <td><span class="badge">${(s.lang || 'en').toUpperCase()}</span></td>
+          <td>${evts.length}</td>
+          <td>${visited}</td>
+        </tr>`;
+      }).join('')
+    : '<tr class="empty-row"><td colspan="5">データなし</td></tr>';
+}
+
+// ─────────────────────────────────────────────────────────
+//  Boot
+// ─────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  // Explicitly initialize to JP tab on every page load.
+  // This is the authoritative default — covers browser cache, form.reset(),
+  // and any other path that might leave EN in an active state.
+  switchDescTab('jp');
+  switchNameTab('jp');
+
+  await loadSpots();
+  renderTable();
+});
+</script>
+</body>
+</html>

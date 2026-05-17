@@ -1,0 +1,1678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>AR Tourism – Yamadera</title>
+
+  <!-- A-Frame + AR.js (location-based) -->
+  <script src="https://cdn.jsdelivr.net/npm/aframe@1.4.0/dist/aframe-master.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
+
+  <!-- Leaflet (spot detail map) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    :root {
+      --accent: #4fc3f7;
+      --accent-dark: #0288d1;
+      --card-bg: rgba(255, 255, 255, 0.95);
+      --radius: 14px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #f0f4f8; font-family: system-ui, -apple-system, sans-serif; }
+
+    /* AR canvas */
+    a-scene { position: fixed !important; top: 0; left: 0; width: 100% !important; height: 100% !important; }
+
+    /* ── UI overlay ── */
+    #ui {
+      position: fixed; inset: 0; z-index: 10;
+      pointer-events: none;
+      display: flex; flex-direction: column;
+    }
+    #ui > * { pointer-events: auto; }
+
+    /* top bar */
+    #top-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px 10px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.97) 0%, rgba(255,255,255,0.0) 100%);
+    }
+    #app-title { color: #1a1a2e; font-size: 15px; font-weight: 700; letter-spacing: 0.02em; }
+
+    #top-right { display: flex; gap: 8px; align-items: center; }
+
+    /* language switcher */
+    #lang-switcher { display: flex; gap: 4px; }
+    #lang-switcher button {
+      background: rgba(255,255,255,0.88); border: 1px solid rgba(0,0,0,0.14);
+      color: #1a1a2e; padding: 5px 11px; border-radius: 8px; font-size: 12px;
+      font-weight: 600; cursor: pointer; transition: background 0.15s;
+    }
+    #lang-switcher button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* list-view toggle */
+    #list-btn {
+      background: rgba(255,255,255,0.88); border: 1px solid rgba(0,0,0,0.14);
+      color: #1a1a2e; padding: 5px 11px; border-radius: 8px; font-size: 12px;
+      font-weight: 600; cursor: pointer;
+    }
+
+    /* GPS badge */
+    #gps-badge {
+      align-self: center; margin-top: 6px;
+      background: rgba(255,255,255,0.88); color: #666;
+      border: 1px solid rgba(0,0,0,0.1);
+      font-size: 11px; padding: 3px 12px; border-radius: 20px;
+      pointer-events: none;
+    }
+    #gps-badge.ok  { color: #2e7d32; }
+    #gps-badge.err { color: #c62828; }
+
+    /* spacer */
+    #spacer { flex: 1; pointer-events: none; }
+
+    /* bottom chips */
+    #bottom-panel {
+      padding: 10px 16px 24px;
+      background: linear-gradient(0deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.0) 100%);
+      background-color: rgba(255,255,255,0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 16px 16px 0 0;
+    }
+    #nearby-label {
+      color: rgba(0,0,0,0.45); font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px;
+    }
+    #spots-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+    #spots-chips::-webkit-scrollbar { display: none; }
+
+    .spot-chip {
+      flex-shrink: 0;
+      background: #ffffff;
+      border: 1px solid rgba(79,195,247,0.45);
+      border-radius: 20px; padding: 7px 16px;
+      cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px;
+      transition: border-color 0.15s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .spot-chip:active { border-color: var(--accent); }
+    .chip-name { display: flex; align-items: center; gap: 5px;
+                 color: #1a1a2e; font-size: 13px; font-weight: 600; white-space: nowrap; }
+    .chip-dot  { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .chip-dist { color: var(--accent-dark); font-size: 11px; }
+
+    /* ── Modal ── */
+    #modal {
+      display: none; position: fixed; inset: 0; z-index: 20;
+      background: rgba(0,0,0,0.45); backdrop-filter: blur(5px);
+      align-items: flex-end; justify-content: center;
+    }
+    #modal.open { display: flex; }
+    #modal-card {
+      width: 100%; max-width: 520px;
+      background: #ffffff; border-radius: 22px 22px 0 0;
+      padding: 20px 22px 44px;
+      animation: slideUp 0.22s ease;
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+      position: relative;  /* for absolute-positioned close button */
+    }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    /* #modal-handle removed — swipe-to-close disabled for LINE browser compatibility */
+    #modal-card { touch-action: none; }  /* disable swipe gestures on card itself */
+    #modal-close {
+      position: absolute; top: 16px; right: 18px;
+      background: rgba(0,0,0,0.07); border: none;
+      color: #333; width: 30px; height: 30px; border-radius: 50%;
+      cursor: pointer; font-size: 15px; line-height: 30px; text-align: center;
+    }
+    #modal-cat  { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent-dark); margin-bottom: 4px; }
+    #modal-name { font-size: 22px; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; }
+    #modal-dist { font-size: 13px; color: #666; margin-bottom: 16px; }
+    #modal-desc { font-size: 15px; color: #333; line-height: 1.65; }
+    #modal-map  {
+      height: 200px; border-radius: 12px; overflow: hidden;
+      margin-top: 18px; border: 1px solid #e8e8e8;
+    }
+    #nav-btn {
+      display: none; width: 100%; margin-top: 14px;
+      padding: 13px; border: none; border-radius: 10px;
+      color: #fff; font-size: 15px; font-weight: 700;
+      cursor: pointer; letter-spacing: 0.02em;
+      transition: opacity 0.15s;
+    }
+    #nav-btn:active { opacity: 0.8; }
+
+    /* ── Navigation minimap ── */
+    #nav-minimap-wrap {
+      display: none; position: fixed;
+      bottom: 170px; right: 12px; z-index: 9998;
+    }
+    #nav-minimap-wrap.show { display: block; }
+    #nav-minimap {
+      width: 120px; height: 120px; border-radius: 50%; overflow: hidden;
+      /* border set dynamically (category color) */
+      box-shadow: 0 0 0 3px #fff, 0 4px 18px rgba(0,0,0,0.3);
+    }
+    #nav-minimap-cancel {
+      position: absolute; top: -5px; right: -5px;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #fff; border: 1.5px solid #e0e0e0;
+      font-size: 11px; cursor: pointer; z-index: 1;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.22); color: #555;
+    }
+    #nav-minimap-arrive {
+      display: none; position: absolute; top: 0; left: 0;
+      width: 120px; height: 120px; border-radius: 50%;
+      background: rgba(255,255,255,0.92); z-index: 2;
+      align-items: center; justify-content: center;
+      flex-direction: column; text-align: center;
+      font-size: 26px;
+    }
+    #nav-minimap-arrive.show { display: flex; }
+
+    /* ── Fallback / List view ── */
+    #fallback {
+      display: none; position: fixed; inset: 0; z-index: 25;
+      background: #f8f9fa; flex-direction: column;
+      overflow: hidden; /* header+filter stay fixed; only #fb-list scrolls */
+    }
+    #fallback.show { display: flex; }
+    #fb-header {
+      flex-shrink: 0; /* never shrink */
+      padding: 52px 24px 24px; text-align: center;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    #fb-icon    { font-size: 42px; margin-bottom: 12px; }
+    #fb-title   { font-size: 20px; font-weight: 700; color: #1a1a2e; margin-bottom: 8px; }
+    #fb-msg     { font-size: 13px; color: #555; line-height: 1.55; margin-bottom: 16px; }
+    #fb-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .fb-btn {
+      padding: 10px 22px; border-radius: 10px; font-size: 14px; font-weight: 600;
+      cursor: pointer; border: none;
+    }
+    .fb-btn.primary { background: var(--accent); color: #fff; }
+    .fb-btn.secondary { background: rgba(0,0,0,0.08); color: #333; }
+    #fb-list {
+      flex: 1;          /* take all remaining height */
+      overflow-y: auto; /* only this section scrolls */
+      -webkit-overflow-scrolling: touch;
+      padding: 16px 16px 56px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .fb-card {
+      background: #ffffff; border: 1px solid #e8e8e8; border-radius: 16px;
+      padding: 18px; cursor: pointer; transition: border-color 0.15s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .fb-card:active { border-color: var(--accent); }
+    .fb-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px; }
+    .fb-card h3 { font-size: 16px; font-weight: 700; color: #1a1a2e; }
+    .fb-badge {
+      font-size: 11px; background: rgba(79,195,247,0.15); color: var(--accent-dark);
+      padding: 2px 9px; border-radius: 10px; white-space: nowrap; margin-left: 8px; flex-shrink: 0;
+    }
+    .fb-card p { font-size: 13px; color: #555; line-height: 1.5; }
+    .fb-dist { font-size: 12px; color: var(--accent-dark); margin-top: 8px; }
+
+    /* ── Category filter bar ── */
+    #fb-filter {
+      flex-shrink: 0; /* never shrink — stays between header and list */
+      display: flex;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      gap: 8px;
+      padding: 8px 16px;
+      background: #fff;
+      border-bottom: 1px solid #f0f0f0;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    #fb-filter::-webkit-scrollbar { display: none; }
+    .fb-filter-tag {
+      flex-shrink: 0;
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 14px; border-radius: 20px; border: 1.5px solid #e0e0e0;
+      background: #fff; color: #6b7280; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.15s; white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fb-filter-tag.active {
+      background: var(--fb-tag-color, #6b7280);
+      border-color: var(--fb-tag-color, #6b7280);
+      color: #fff;
+    }
+    /* Hide non-matching cards */
+    .fb-card[data-category].hidden { display: none; }
+
+    /* ── AR HTML Overlay (compass-driven callouts) ── */
+    #ar-overlay {
+      position: fixed; inset: 0; z-index: 11;
+      pointer-events: none; overflow: hidden;
+    }
+
+    .ar-callout {
+      position: absolute;
+      pointer-events: auto; cursor: pointer;
+      transform: translate(-50%, -100%);
+      transition: left 0.07s linear, top 0.07s linear, opacity 0.25s;
+      will-change: left, top;
+    }
+    .ar-bubble {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 14px; padding: 10px 14px 9px;
+      max-width: 200px; min-width: 140px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      /* box-shadow applied via JS: inset left strip (category color) + drop shadow */
+    }
+    .ar-cat { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+    .ar-cat-icon  { font-size: 14px; line-height: 1; flex-shrink: 0; }
+    .ar-cat-label {
+      font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--accent-dark); font-weight: 700;
+    }
+    .ar-spot-name {
+      font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 172px;
+    }
+    .ar-spot-desc {
+      font-size: 10px; color: #555; line-height: 1.45;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .ar-spot-dist { font-size: 10px; color: var(--accent-dark); margin-top: 6px; }
+    .ar-stem {
+      width: 2px; height: 18px; margin: 0 auto;
+      background: linear-gradient(180deg, rgba(79,195,247,0.6), transparent);
+    }
+    .ar-stem-dot {
+      width: 6px; height: 6px; border-radius: 50%; margin: 0 auto;
+      background: rgba(79,195,247,0.6);
+    }
+
+    /* Edge direction arrows */
+    .ar-edge {
+      position: absolute;
+      pointer-events: auto; cursor: pointer;
+      display: flex; align-items: center; gap: 5px;
+      background: rgba(255, 255, 255, 0.93);
+      border: 1px solid rgba(79, 195, 247, 0.35);
+      border-radius: 20px; padding: 5px 11px 5px 8px;
+      transition: top 0.15s ease-out;
+      max-width: 148px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .ar-edge.side-left  { left: 6px; }
+    .ar-edge.side-right { right: 6px; }
+    /* border and background colors applied via JS (category-based) */
+    .ar-edge-icon { font-size: 12px; flex-shrink: 0; }
+    .ar-edge-info { display: flex; flex-direction: column; overflow: hidden; }
+    .ar-edge-name { font-size: 11px; font-weight: 600; color: #1a1a2e;
+                    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ar-edge-dist { font-size: 9px; }
+
+    /* ── Front-facing distance indicator ── */
+    #front-indicator {
+      position: fixed; top: 68px; left: 50%; transform: translateX(-50%);
+      z-index: 12; pointer-events: none;
+      display: flex; flex-direction: column; align-items: center; gap: 1px;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 22px; padding: 6px 16px 8px;
+      box-shadow: 0 3px 14px rgba(0,0,0,0.12);
+      white-space: nowrap;
+      opacity: 0; transition: opacity 0.3s ease;
+    }
+    #front-indicator.visible { opacity: 1; }
+    #front-indicator.hidden  { opacity: 0; }
+    .fi-arrow { font-size: 15px; line-height: 1; }
+    .fi-name  { font-size: 11px; font-weight: 700; color: #1a1a2e;
+                max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+    .fi-dist  { font-size: 10px; font-weight: 600; }
+
+    /* Compass unavailable toast */
+    #compass-toast {
+      position: fixed; bottom: 168px; left: 50%; transform: translateX(-50%);
+      z-index: 12; pointer-events: none; white-space: nowrap;
+      background: rgba(255,255,255,0.92); border: 1px solid rgba(255,160,0,0.4);
+      color: #e65100; font-size: 12px; padding: 6px 16px; border-radius: 20px;
+      opacity: 0; transition: opacity 0.4s;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    #compass-toast.show { opacity: 1; }
+
+    /* ── Route recording button ── */
+    #rec-btn {
+      position: fixed;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
+      right: 20px;
+      z-index: 9999;
+      width: 62px; height: 62px; border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.4);
+      background: #c62828; color: #fff;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+      cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      transition: background 0.2s;
+      -webkit-tap-highlight-color: transparent;
+      pointer-events: auto;
+      isolation: isolate;
+    }
+    #rec-btn.recording {
+      background: #b71c1c;
+      animation: recPulse 1.4s ease-in-out infinite;
+    }
+    @keyframes recPulse {
+      0%,100% { box-shadow: 0 4px 16px rgba(198,40,40,0.45); }
+      50%      { box-shadow: 0 4px 28px rgba(198,40,40,0.9); }
+    }
+    #rec-dot   { font-size: 14px; line-height: 1; }
+    #rec-label { font-size: 10px; }
+    #rec-timer { font-size: 10px; font-weight: 400; font-variant-numeric: tabular-nums; }
+
+    /* ── Route save / share modal ── */
+    #route-modal {
+      display: none; position: fixed; inset: 0; z-index: 30;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(6px);
+      align-items: center; justify-content: center;
+    }
+    #route-modal.open { display: flex; }
+    #route-card {
+      background: #ffffff;
+      border: 1px solid rgba(79,195,247,0.25);
+      border-radius: 20px; padding: 28px 24px;
+      width: min(90vw, 360px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    }
+    #route-card h3 { color: #1a1a2e; font-size: 18px; margin-bottom: 10px; }
+    #route-modal-stats { color: #666; font-size: 13px; margin-bottom: 18px; }
+    #route-name-input {
+      width: 100%; background: #f8f9fa;
+      border: 1px solid #d0d0d0; border-radius: 10px;
+      padding: 12px 14px; color: #1a1a2e; font-size: 16px;
+      outline: none; margin-bottom: 18px;
+    }
+    #route-name-input:focus { border-color: var(--accent); }
+    .route-actions { display: flex; gap: 10px; }
+    .route-btn {
+      flex: 1; padding: 11px; border-radius: 10px;
+      font-size: 14px; font-weight: 600; cursor: pointer; border: none;
+    }
+    .route-btn.primary  { background: var(--accent); color: #fff; }
+    .route-btn.secondary{ background: rgba(0,0,0,0.07); color: #333; }
+    .route-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    #route-saved-name { color: #1a1a2e; font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+    #route-saved-msg  { color: #666; font-size: 13px; margin-bottom: 14px; }
+    #route-share-url {
+      width: 100%; background: #f8f9fa;
+      border: 1px solid #d0d0d0; border-radius: 10px;
+      padding: 10px 14px; color: #444; font-size: 12px;
+      outline: none; margin-bottom: 18px; word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── AR Scene ── -->
+<a-scene id="ar-scene"
+         vr-mode-ui="enabled: false"
+         arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false; trackingMethod: best"
+         renderer="logarithmicDepthBuffer: true; colorManagement: true; antialias: true"
+         loading-screen="dotsColor: #4fc3f7; backgroundColor: #f0f4f8"
+         embedded>
+  <a-camera id="ar-camera" gps-camera rotation-reader></a-camera>
+</a-scene>
+
+<!-- ── AR HTML Overlay (compass callouts) ── -->
+<div id="ar-overlay"></div>
+<div id="compass-toast">🧭 Tap screen to enable compass</div>
+
+<!-- ── Front-facing distance indicator ── -->
+<div id="front-indicator" aria-hidden="true">
+  <span class="fi-arrow">↑</span>
+  <span class="fi-name"></span>
+  <span class="fi-dist"></span>
+</div>
+
+<!-- ── UI Overlay ── -->
+<div id="ui">
+  <div id="top-bar">
+    <span id="app-title">⛩ Yamadera AR</span>
+    <div id="top-right">
+      <button id="list-btn" onclick="toggleFallback(true)">☰ List</button>
+      <div id="lang-switcher">
+        <button data-lang="en" onclick="setLang('en')">EN</button>
+        <button data-lang="jp" onclick="setLang('jp')">JP</button>
+        <button data-lang="zh" onclick="setLang('zh')">ZH</button>
+      </div>
+    </div>
+  </div>
+  <div id="gps-badge">GPS: locating…</div>
+  <div id="spacer"></div>
+  <div id="bottom-panel">
+    <div id="nearby-label">Nearby</div>
+    <div id="spots-chips"></div>
+  </div>
+</div>
+
+<!-- ── Spot detail modal ── -->
+<div id="modal" role="dialog" aria-modal="true" onclick="handleModalBg(event)">
+  <div id="modal-card">
+    <button id="modal-close" onclick="closeModal()" aria-label="Close">✕</button>
+    <div id="modal-cat"></div>
+    <h2 id="modal-name"></h2>
+    <p id="modal-dist"></p>
+    <p id="modal-desc"></p>
+    <div id="modal-map"></div>
+    <button id="nav-btn" onclick="triggerNavigation()">🧭 このスポットに向かう</button>
+  </div>
+</div>
+
+<!-- ── Navigation minimap ── -->
+<div id="nav-minimap-wrap">
+  <div id="nav-minimap"></div>
+  <button id="nav-minimap-cancel" onclick="cancelNavigation()" aria-label="ナビキャンセル">✕</button>
+  <div id="nav-minimap-arrive"></div>
+</div>
+
+<!-- ── Route recording button ── -->
+<button id="rec-btn" onclick="toggleRecording()" title="Record route">
+  <span id="rec-dot">●</span>
+  <span id="rec-label">REC</span>
+</button>
+
+<!-- ── Route save / share modal ── -->
+<div id="route-modal" onclick="handleRouteModalBg(event)">
+  <div id="route-card">
+    <!-- Step 1: name -->
+    <div id="route-step-name">
+      <h3>Save Route</h3>
+      <p id="route-modal-stats"></p>
+      <input id="route-name-input" type="text" placeholder="My Route" maxlength="60">
+      <div class="route-actions">
+        <button class="route-btn secondary" onclick="cancelRouteSave()">Discard</button>
+        <button class="route-btn primary"   onclick="saveRoute()">Save &amp; Share</button>
+      </div>
+    </div>
+    <!-- Step 2: share -->
+    <div id="route-step-share" style="display:none">
+      <div id="route-saved-name"></div>
+      <div id="route-saved-msg">Route saved! Share this link:</div>
+      <input id="route-share-url" readonly>
+      <div class="route-actions">
+        <button class="route-btn secondary" onclick="closeRouteModal()">Close</button>
+        <button class="route-btn primary"   onclick="copyRouteUrl()">Copy URL</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Fallback / list view ── -->
+<div id="fallback">
+  <div id="fb-header">
+    <div id="fb-icon">⛩</div>
+    <h1 id="fb-title">Yamadera Guide</h1>
+    <p id="fb-msg"></p>
+    <div id="fb-actions">
+      <button class="fb-btn primary" onclick="retryAR()" id="retry-btn">Try AR Again</button>
+      <button class="fb-btn secondary" onclick="toggleFallback(false)" id="close-list-btn">Close List</button>
+    </div>
+  </div>
+  <!-- Category filter tags (populated by JS) -->
+  <div id="fb-filter"></div>
+  <div id="fb-list"></div>
+</div>
+
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────────────
+//  i18n strings
+// ─────────────────────────────────────────────────────────
+const I18N = {
+  en: {
+    nearby:       'Nearby spots',
+    away:         'away',
+    noSpots:      'No spots detected nearby',
+    allSpots:     'All spots',
+    gpsWait:      'GPS: locating…',
+    gpsOk:        acc => `GPS: ±${Math.round(acc)}m`,
+    gpsDenied:    'GPS: permission denied',
+    gpsError:     'GPS: unavailable',
+    camDenied:    'Camera permission denied',
+    noCamera:     'Camera not available',
+    listView:     'Browse all spots:',
+    tryAR:        'Try AR Again',
+    closeList:    'Close List',
+    fallbackMsg:  reason => `${reason} — AR overlay unavailable. You can still browse spots below.`,
+    cat: { heritage:'Heritage', nature:'Nature', facility:'Facility', shop:'Shop', default:'Spot' }
+  },
+  jp: {
+    nearby:       '近くのスポット',
+    away:         '先',
+    noSpots:      '付近にスポットが検出されていません',
+    allSpots:     'すべてのスポット',
+    gpsWait:      'GPS: 測位中…',
+    gpsOk:        acc => `GPS: ±${Math.round(acc)}m`,
+    gpsDenied:    'GPS: 許可が拒否されました',
+    gpsError:     'GPS: 利用不可',
+    camDenied:    'カメラの許可が拒否されました',
+    noCamera:     'カメラが利用できません',
+    listView:     'すべてのスポットを見る：',
+    tryAR:        'ARを再試行',
+    closeList:    'リストを閉じる',
+    fallbackMsg:  reason => `${reason} — ARオーバーレイを表示できません。以下でスポットを閲覧できます。`,
+    cat: { heritage:'歴史文化', nature:'自然景観', facility:'公共施設', shop:'お店', default:'スポット' }
+  },
+  zh: {
+    nearby:       '附近景点',
+    away:         '处',
+    noSpots:      '附近未检测到景点',
+    allSpots:     '所有景点',
+    gpsWait:      'GPS: 定位中…',
+    gpsOk:        acc => `GPS: ±${Math.round(acc)}m`,
+    gpsDenied:    'GPS: 权限被拒绝',
+    gpsError:     'GPS: 不可用',
+    camDenied:    '相机权限被拒绝',
+    noCamera:     '相机不可用',
+    listView:     '浏览所有景点：',
+    tryAR:        '重试AR',
+    closeList:    '关闭列表',
+    fallbackMsg:  reason => `${reason} — AR叠加层不可用。您仍可在下方浏览景点。`,
+    cat: { heritage:'文化遗产', nature:'自然景观', facility:'公共设施', shop:'商店', default:'景点' }
+  }
+};
+
+// ─────────────────────────────────────────────────────────
+//  State
+// ─────────────────────────────────────────────────────────
+let lang           = localStorage.getItem('arLang') || 'en';
+let spots          = [];
+let userPos        = null;
+let gpsWatchId     = null;
+let fallbackReason = '';
+
+// ─────────────────────────────────────────────────────────
+//  i18n helpers
+// ─────────────────────────────────────────────────────────
+const t   = key => I18N[lang][key] || I18N.en[key];
+const tCat = cat => (I18N[lang].cat || {})[cat] || (I18N.en.cat[cat]) || cat;
+
+function setLang(l) {
+  lang = l;
+  localStorage.setItem('arLang', l);
+  document.querySelectorAll('#lang-switcher button')
+    .forEach(b => b.classList.toggle('active', b.dataset.lang === l));
+  document.getElementById('list-btn').textContent     = '☰ List';
+  document.getElementById('nearby-label').textContent = t('nearby');
+  document.getElementById('retry-btn').textContent    = t('tryAR');
+  document.getElementById('close-list-btn').textContent = t('closeList');
+  refreshChips();
+  refreshFallbackList();   // also rebuilds filter bar labels
+  clearAROverlay();
+  scheduleOverlay();
+  if (document.getElementById('modal').classList.contains('open') && window._activeSpot) {
+    openModal(window._activeSpot, window._activeDist);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Haversine distance in metres
+// ─────────────────────────────────────────────────────────
+function haversine(lat1, lng1, lat2, lng2) {
+  const R  = 6371e3;
+  const p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180;
+  const dp = (lat2 - lat1) * Math.PI / 180;
+  const dl = (lng2 - lng1) * Math.PI / 180;
+  const a  = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ─────────────────────────────────────────────────────────
+//  Spot loading  (always from server spots.json)
+// ─────────────────────────────────────────────────────────
+async function loadSpots() {
+  try {
+    const r = await fetch('spots.json');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    spots = await r.json();
+  } catch(e) {
+    console.warn('spots.json load failed', e);
+    spots = [];
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────
+//  Chips (bottom panel)
+// ─────────────────────────────────────────────────────────
+function refreshChips() {
+  const container = document.getElementById('spots-chips');
+  container.innerHTML = '';
+
+  const ranked = spots
+    .map(s => ({ s, dist: userPos ? haversine(userPos.lat, userPos.lng, s.lat, s.lng) : null }))
+    .sort((a, b) => (a.dist ?? 9e9) - (b.dist ?? 9e9));
+
+  if (ranked.length === 0) {
+    container.innerHTML = `<span style="color:rgba(255,255,255,0.35);font-size:13px">${t('noSpots')}</span>`;
+    return;
+  }
+
+  ranked.forEach(({ s, dist }) => {
+    const chip  = document.createElement('div');
+    const color = catColor(s.category);
+    chip.className = 'spot-chip';
+    chip.style.borderColor = `${color}66`;
+    chip.innerHTML = `
+      <span class="chip-name">
+        <span class="chip-dot" style="background:${color}"></span>${s.name[lang] || s.name.en}
+      </span>
+      <span class="chip-dist" style="color:${color}">${dist !== null ? Math.round(dist) + 'm' : '—'}</span>
+    `;
+    chip.addEventListener('click', () => { Analytics.onChipTap(s.id); openModal(s, dist); });
+    container.appendChild(chip);
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+//  Modal
+// ─────────────────────────────────────────────────────────
+let selectedSpotId = null;   // 選択中スポット（距離制限なしで方向案内）
+let isNavigating   = false;  // ナビゲーション中フラグ
+let navSpot        = null;   // ナビ対象スポット
+let _modalMap      = null;   // Leaflet インスタンス（再利用防止で毎回再生成）
+
+function openModal(spot, dist) {
+  Analytics.onModalOpen(spot.id);
+  selectedSpotId    = spot.id;
+  window._activeSpot = spot;
+  window._activeDist = dist;
+  document.getElementById('modal-cat').textContent  = tCat(spot.category || 'default');
+  document.getElementById('modal-name').textContent = spot.name[lang] || spot.name.en;
+  document.getElementById('modal-dist').textContent =
+    dist != null ? `${Math.round(dist)}m ${t('away')}` : '';
+  document.getElementById('modal-desc').textContent =
+    spot.description[lang] || spot.description.en || '';
+  document.getElementById('modal').classList.add('open');
+
+  // ナビボタンのカテゴリカラーを設定して表示
+  const navBtn = document.getElementById('nav-btn');
+  navBtn.style.background = catColor(spot.category);
+  navBtn.style.display    = 'block';
+
+  // 方向矢印を即更新（選択スポットは距離制限なし）
+  scheduleOverlay();
+
+  // 地図を描画（モーダルアニメーション後に初期化）
+  setTimeout(() => initModalMap(spot), 250);
+}
+
+function closeModal() {
+  Analytics.onModalClose();
+  document.getElementById('modal').classList.remove('open');
+  document.getElementById('nav-btn').style.display = 'none';
+  window._activeSpot = null;
+  if (_modalMap) { _modalMap.remove(); _modalMap = null; }
+
+  // ナビ中はselectedSpotIdを維持；ナビ中でなければクリア
+  if (!isNavigating) {
+    selectedSpotId = null;
+    scheduleOverlay();
+  }
+}
+
+function initModalMap(spot) {
+  const container = document.getElementById('modal-map');
+  if (_modalMap) { _modalMap.remove(); _modalMap = null; }
+
+  _modalMap = L.map(container, { zoomControl: false, attributionControl: false });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18
+  }).addTo(_modalMap);
+
+  const color  = catColor(spot.category);
+  const icon   = CAT_ICON_MAP[spot.category] || '📍';
+  const bounds = [];
+
+  // ── スポットマーカー（カテゴリアイコン入り円形バッジ）──
+  const spotIcon = L.divIcon({
+    className: '',
+    html: `<div style="
+      width:32px;height:32px;border-radius:50%;
+      background:${color};border:2px solid #fff;
+      box-shadow:0 2px 8px rgba(0,0,0,0.35);
+      display:flex;align-items:center;justify-content:center;
+      font-size:18px;line-height:1">${icon}</div>`,
+    iconSize: [32, 32], iconAnchor: [16, 16]
+  });
+  L.marker([spot.lat, spot.lng], { icon: spotIcon })
+    .bindPopup(spot.name[lang] || spot.name.en)
+    .addTo(_modalMap);
+  bounds.push([spot.lat, spot.lng]);
+
+  if (userPos) {
+    // ── 現在地マーカー（大きめの青い丸）──
+    const myMarker = L.circleMarker([userPos.lat, userPos.lng], {
+      radius: 8, fillColor: '#2563eb', color: '#fff',
+      weight: 2, fillOpacity: 1
+    }).addTo(_modalMap);
+    bounds.push([userPos.lat, userPos.lng]);
+
+    // ── OSRM で道路ルートを取得、失敗時は直線フォールバック ──
+    const routeLabel = L.tooltip({ permanent: true, direction: 'center', offset: [0, 0] })
+      .setContent('ルート取得中…');
+    _modalMap.openTooltip(routeLabel, [
+      (userPos.lat + spot.lat) / 2, (userPos.lng + spot.lng) / 2
+    ]);
+    _modalMap.fitBounds(bounds, { padding: [28, 28], maxZoom: 16 });
+    _modalMap.invalidateSize();
+
+    const osrmUrl =
+      `https://router.project-osrm.org/route/v1/foot/` +
+      `${userPos.lng},${userPos.lat};${spot.lng},${spot.lat}` +
+      `?overview=full&geometries=geojson`;
+
+    fetch(osrmUrl)
+      .then(r => { if (!r.ok) throw new Error('OSRM ' + r.status); return r.json(); })
+      .then(data => {
+        _modalMap.closeTooltip(routeLabel);
+        const geom = data.routes?.[0]?.geometry;
+        if (!geom) throw new Error('no route');
+        L.geoJSON(geom, {
+          style: { color, weight: 4, opacity: 0.8 }
+        }).addTo(_modalMap);
+        // ルートを含めて fitBounds を更新
+        const latlngs = geom.coordinates.map(([lng, lat]) => [lat, lng]);
+        _modalMap.fitBounds(L.polyline(latlngs).getBounds(), { padding: [20, 20] });
+      })
+      .catch(() => {
+        // フォールバック：直線（破線）
+        _modalMap.closeTooltip(routeLabel);
+        L.polyline(
+          [[userPos.lat, userPos.lng], [spot.lat, spot.lng]],
+          { color, weight: 3, dashArray: '7 6', opacity: 0.75 }
+        ).addTo(_modalMap);
+      });
+  } else {
+    _modalMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+    _modalMap.invalidateSize();
+  }
+}
+
+function handleModalBg(e) {
+  if (e.target.id === 'modal') closeModal();
+}
+
+// ── Navigation ────────────────────────────────────────────
+let _miniMap          = null;
+let _miniMapPosMarker = null;
+
+function triggerNavigation() {
+  const spot = window._activeSpot;
+  if (!spot) return;
+  isNavigating   = true;
+  navSpot        = spot;
+  selectedSpotId = spot.id;
+  closeModal();
+  initMiniMap(spot);
+  scheduleOverlay();
+}
+
+function cancelNavigation() {
+  isNavigating   = false;
+  navSpot        = null;
+  selectedSpotId = null;
+  if (_miniMap) { _miniMap.remove(); _miniMap = null; }
+  _miniMapPosMarker = null;
+  document.getElementById('nav-minimap-wrap').classList.remove('show');
+  document.getElementById('nav-minimap-arrive').classList.remove('show');
+  scheduleOverlay();
+}
+
+function initMiniMap(spot) {
+  const wrap      = document.getElementById('nav-minimap-wrap');
+  const container = document.getElementById('nav-minimap');
+  if (_miniMap) { _miniMap.remove(); _miniMap = null; }
+  _miniMapPosMarker = null;
+
+  const color = catColor(spot.category);
+  container.style.border = `3px solid ${color}`;
+
+  _miniMap = L.map(container, {
+    zoomControl: false, attributionControl: false,
+    dragging: false, scrollWheelZoom: false,
+    doubleClickZoom: false, boxZoom: false, keyboard: false
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18
+  }).addTo(_miniMap);
+
+  // スポットマーカー（カテゴリアイコン）
+  const icon = CAT_ICON_MAP[spot.category] || '📍';
+  const spotIcon = L.divIcon({
+    className: '',
+    html: `<div style="width:24px;height:24px;border-radius:50%;
+      background:${color};border:2px solid #fff;
+      display:flex;align-items:center;justify-content:center;
+      font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${icon}</div>`,
+    iconSize: [24, 24], iconAnchor: [12, 12]
+  });
+  L.marker([spot.lat, spot.lng], { icon: spotIcon }).addTo(_miniMap);
+
+  const bounds = [[spot.lat, spot.lng]];
+
+  if (userPos) {
+    _miniMapPosMarker = L.circleMarker([userPos.lat, userPos.lng], {
+      radius: 5, fillColor: '#2563eb', color: '#fff', weight: 2, fillOpacity: 1
+    }).addTo(_miniMap);
+    bounds.push([userPos.lat, userPos.lng]);
+
+    // OSRM ルート取得（失敗時は直線フォールバック）
+    const osrmUrl =
+      `https://router.project-osrm.org/route/v1/foot/` +
+      `${userPos.lng},${userPos.lat};${spot.lng},${spot.lat}` +
+      `?overview=full&geometries=geojson`;
+    fetch(osrmUrl)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        const geom = data.routes?.[0]?.geometry;
+        if (!geom || !_miniMap) return;
+        L.geoJSON(geom, { style: { color, weight: 3, opacity: 0.8 } }).addTo(_miniMap);
+        const ll = geom.coordinates.map(([lng, lat]) => [lat, lng]);
+        _miniMap.fitBounds(L.polyline(ll).getBounds(), { padding: [10, 10] });
+      })
+      .catch(() => {
+        if (!_miniMap) return;
+        L.polyline([[userPos.lat, userPos.lng], [spot.lat, spot.lng]],
+          { color, weight: 2, dashArray: '5 4', opacity: 0.75 }
+        ).addTo(_miniMap);
+        _miniMap.fitBounds(bounds, { padding: [10, 10] });
+      });
+  } else {
+    _miniMap.setView([spot.lat, spot.lng], 15);
+  }
+
+  _miniMap.invalidateSize();
+  wrap.classList.add('show');
+}
+
+function updateMiniMapPos() {
+  if (!isNavigating || !navSpot || !_miniMap) return;
+  if (!userPos) return;
+
+  const dist = haversine(userPos.lat, userPos.lng, navSpot.lat, navSpot.lng);
+
+  // 現在地マーカーを移動
+  if (_miniMapPosMarker) {
+    _miniMapPosMarker.setLatLng([userPos.lat, userPos.lng]);
+  } else {
+    _miniMapPosMarker = L.circleMarker([userPos.lat, userPos.lng], {
+      radius: 5, fillColor: '#2563eb', color: '#fff', weight: 2, fillOpacity: 1
+    }).addTo(_miniMap);
+  }
+
+  // 到着判定 10m
+  if (dist <= 10) {
+    const arrive = document.getElementById('nav-minimap-arrive');
+    if (!arrive.classList.contains('show')) {
+      arrive.textContent = '✅';
+      arrive.classList.add('show');
+      setTimeout(() => cancelNavigation(), 3000);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Fallback / list view
+// ─────────────────────────────────────────────────────────
+function toggleFallback(show) {
+  const el = document.getElementById('fallback');
+  if (show) {
+    document.getElementById('fb-title').textContent = 'Yamadera Guide';
+    document.getElementById('fb-msg').textContent   = fallbackReason || t('listView');
+    el.classList.add('show');
+    activeFilter = 'all';   // reset filter on open
+    refreshFallbackList();
+  } else {
+    el.classList.remove('show');
+  }
+}
+
+// ── Category filter state ──────────────────────────────
+let activeFilter = 'all';  // 'all' or a category key
+
+function buildFilterBar() {
+  const bar = document.getElementById('fb-filter');
+  bar.innerHTML = '';
+
+  // Collect categories present in current spots
+  const usedCats = [...new Set(spots.map(s => s.category || 'default'))];
+
+  // Define tag order (known categories first, then any extras)
+  const ORDER = ['heritage', 'nature', 'facility', 'shop'];
+  const cats = ORDER.filter(c => usedCats.includes(c))
+    .concat(usedCats.filter(c => !ORDER.includes(c)));
+
+  // 'all' tag first
+  const allTag = document.createElement('button');
+  allTag.className = 'fb-filter-tag' + (activeFilter === 'all' ? ' active' : '');
+  allTag.dataset.cat = 'all';
+  allTag.style.setProperty('--fb-tag-color', '#6b7280');
+  allTag.textContent = `🗺️ ${t('allSpots')}`;
+  allTag.addEventListener('click', () => setFilter('all'));
+  bar.appendChild(allTag);
+
+  // One tag per category
+  cats.forEach(cat => {
+    const tag = document.createElement('button');
+    tag.className = 'fb-filter-tag' + (activeFilter === cat ? ' active' : '');
+    tag.dataset.cat = cat;
+    tag.style.setProperty('--fb-tag-color', catColor(cat));
+    tag.textContent = `${CAT_ICON_MAP[cat] || '📍'} ${tCat(cat)}`;
+    tag.addEventListener('click', () => setFilter(cat));
+    bar.appendChild(tag);
+  });
+}
+
+function setFilter(cat) {
+  activeFilter = cat;
+
+  // Update tag active states
+  document.querySelectorAll('.fb-filter-tag').forEach(tag => {
+    tag.classList.toggle('active', tag.dataset.cat === cat);
+  });
+
+  // Show / hide cards
+  document.querySelectorAll('#fb-list .fb-card[data-category]').forEach(card => {
+    const match = cat === 'all' || card.dataset.category === cat;
+    card.classList.toggle('hidden', !match);
+  });
+}
+
+function refreshFallbackList() {
+  const list = document.getElementById('fb-list');
+  list.innerHTML = '';
+  spots
+    .map(s => ({ s, dist: userPos ? haversine(userPos.lat, userPos.lng, s.lat, s.lng) : null }))
+    .sort((a, b) => (a.dist ?? 9e9) - (b.dist ?? 9e9))
+    .forEach(({ s, dist }) => {
+      const card = document.createElement('div');
+      card.className = 'fb-card';
+      card.dataset.category = s.category || 'default';
+      // Apply hidden if a filter is active and doesn't match
+      if (activeFilter !== 'all' && card.dataset.category !== activeFilter) {
+        card.classList.add('hidden');
+      }
+      const color = catColor(s.category);
+      const desc  = s.description[lang] || s.description.en || '';
+      card.innerHTML = `
+        <div class="fb-card-header">
+          <h3>${s.name[lang] || s.name.en}</h3>
+          <span class="fb-badge" style="background:${color}22;color:${color}">
+            ${CAT_ICON_MAP[s.category] || '📍'} ${tCat(s.category || 'default')}
+          </span>
+        </div>
+        <p>${desc.length > 130 ? desc.slice(0,130) + '…' : desc}</p>
+        ${dist !== null ? `<div class="fb-dist">${Math.round(dist)}m ${t('away')}</div>` : ''}
+      `;
+      card.addEventListener('click', () => openModal(s, dist));
+      list.appendChild(card);
+    });
+
+  buildFilterBar();
+}
+
+function retryAR() {
+  document.getElementById('fallback').classList.remove('show');
+  fallbackReason = '';
+  initPermissionsAndAR();
+}
+
+// ─────────────────────────────────────────────────────────
+//  GPS
+// ─────────────────────────────────────────────────────────
+function startGPS() {
+  const badge = document.getElementById('gps-badge');
+  badge.textContent = t('gpsWait');
+  badge.className   = '';
+
+  if (!('geolocation' in navigator)) {
+    badge.textContent = t('gpsError');
+    badge.className   = 'err';
+    return;
+  }
+
+  gpsWatchId = navigator.geolocation.watchPosition(
+    pos => {
+      userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      badge.textContent = t('gpsOk')(pos.coords.accuracy);
+      badge.className   = 'ok';
+      Analytics.onGPS(pos);
+      updateMiniMapPos();
+      refreshChips();
+      scheduleOverlay();
+      if (document.getElementById('fallback').classList.contains('show')) refreshFallbackList();
+    },
+    err => {
+      badge.className   = 'err';
+      badge.textContent = err.code === 1 ? t('gpsDenied') : t('gpsError');
+      refreshChips(); // show spots without distances
+    },
+    { enableHighAccuracy: true, maximumAge: 3000, timeout: 20000 }
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+//  AR init  (camera permission check → show AR or fallback)
+// ─────────────────────────────────────────────────────────
+function initPermissionsAndAR() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    fallbackReason = t('noCamera');
+    toggleFallback(true);
+    startGPS();
+    return;
+  }
+
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+    .then(stream => {
+      stream.getTracks().forEach(t => t.stop());
+      startGPS();
+    })
+    .catch(err => {
+      console.warn('Camera error:', err);
+      fallbackReason = t('camDenied');
+      toggleFallback(true);
+      startGPS();
+    });
+}
+
+// ─────────────────────────────────────────────────────────
+//  Compass + AR HTML Overlay
+// ─────────────────────────────────────────────────────────
+const H_FOV          = 62;   // horizontal camera field of view (degrees)
+const ARROW_MAX_DIST = 500;  // max distance (m) to show edge arrows
+
+let compassHeading = null;   // degrees from true north, clockwise (null = unavailable)
+let deviceBeta     = 50;     // device pitch: 0=horizontal, 90=vertical
+let overlayPending = false;
+
+const CAT_ICON_MAP = { heritage:'🏯', nature:'🌿', facility:'🚌', shop:'🛍️', default:'📍' };
+
+const CAT_COLOR = {
+  heritage: '#d97706',
+  nature:   '#10b981',
+  facility: '#3b82f6',
+  shop:     '#ec4899',
+  default:  '#6b7280'
+};
+const CAT_BG = {
+  heritage: 'rgba(217,119,6,0.09)',
+  nature:   'rgba(16,185,129,0.09)',
+  facility: 'rgba(59,130,246,0.09)',
+  shop:     'rgba(236,72,153,0.09)',
+  default:  'rgba(107,114,128,0.09)'
+};
+function catColor(cat) { return CAT_COLOR[cat] || CAT_COLOR.default; }
+function catBg(cat)    { return CAT_BG[cat]    || CAT_BG.default;    }
+
+// Normalize angle to -180..+180
+function normAngle(a) { return ((a % 360) + 540) % 360 - 180; }
+
+// True bearing from (lat1,lng1) to (lat2,lng2), degrees 0=N clockwise
+function bearingTo(lat1, lng1, lat2, lng2) {
+  const dL = (lng2 - lng1) * Math.PI / 180;
+  const f1 = lat1 * Math.PI / 180, f2 = lat2 * Math.PI / 180;
+  const y  = Math.sin(dL) * Math.cos(f2);
+  const x  = Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dL);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+// First sentence of description text
+function firstSentence(text) {
+  const m = text.match(/^[^.!?。！？]+[.!?。！？]?/);
+  return m ? m[0].trim() : text.slice(0, 70);
+}
+
+function initCompass() {
+  let gotAbsolute = false;
+  const toast = document.getElementById('compass-toast');
+
+  function onOrient(e) {
+    if (e.webkitCompassHeading != null) {
+      // iOS Safari — already true north
+      compassHeading = e.webkitCompassHeading;
+      toast.classList.remove('show');
+    } else if (e.alpha != null) {
+      // Android: prefer absolute events
+      if (e.absolute || !gotAbsolute) {
+        compassHeading = (360 - e.alpha + 360) % 360;
+      }
+      toast.classList.remove('show');
+    }
+    if (e.beta != null) deviceBeta = e.beta;
+    scheduleOverlay();
+  }
+
+  window.addEventListener('deviceorientationabsolute', e => { gotAbsolute = true; onOrient(e); }, true);
+  window.addEventListener('deviceorientation', onOrient, true);
+
+  // Show hint if no compass data arrives within 3 s
+  setTimeout(() => { if (compassHeading === null) toast.classList.add('show'); }, 3000);
+}
+
+function scheduleOverlay() {
+  if (overlayPending) return;
+  overlayPending = true;
+  requestAnimationFrame(() => { overlayPending = false; renderAROverlay(); });
+}
+
+function renderAROverlay() {
+  if (!userPos || compassHeading === null) return;
+
+  const overlay = document.getElementById('ar-overlay');
+  const W = window.innerWidth, H = window.innerHeight;
+  const halfFov = H_FOV / 2;
+
+  // Vertical baseline: horizon height adjusted for device pitch
+  // beta≈50° = normal phone-hold → horizon at ~42% from top
+  const pitchY = H * Math.min(Math.max(0.26 + (deviceBeta - 50) * 0.006, 0.24), 0.60);
+
+  // ── Per-spot projection ──
+  const data = spots.map(spot => {
+    const dist     = haversine(userPos.lat, userPos.lng, spot.lat, spot.lng);
+    const brg      = bearingTo(userPos.lat, userPos.lng, spot.lat, spot.lng);
+    const rel      = normAngle(brg - compassHeading); // -180..+180
+    const inView   = Math.abs(rel) < halfFov;
+    const inRadius = dist <= (spot.radius || 50);
+    const screenX  = W / 2 + (rel / halfFov) * (W / 2);
+    return { spot, dist, rel, inView, inRadius, screenX };
+  });
+
+  // ── Callouts: in-view AND within detection radius ──
+  const callouts = data
+    .filter(d => d.inView && d.inRadius)
+    .sort((a, b) => a.dist - b.dist);
+
+  // Greedy vertical collision avoidance — push overlapping callouts upward
+  const BUBBLE_H = 115, BUBBLE_W = 214, MARGIN = 10;
+  const placed = [];
+  callouts.forEach(d => {
+    let y = pitchY;
+    for (let pass = 0; pass < 10; pass++) {
+      const hit = placed.find(p =>
+        Math.abs(p.cx - d.screenX) < BUBBLE_W + MARGIN &&
+        y - BUBBLE_H - MARGIN <= p.bottom && y >= p.top - MARGIN
+      );
+      if (!hit) break;
+      y = hit.top - BUBBLE_H - MARGIN;
+    }
+    y = Math.max(BUBBLE_H + 28, Math.min(H * 0.72, y));
+    placed.push({ cx: d.screenX, top: y - BUBBLE_H, bottom: y });
+    d.finalY = y;
+  });
+
+  // ── Front indicator: in-view, outside radius, closest only ──
+  // Selected spot bypasses ARROW_MAX_DIST limit
+  const frontCandidates = data
+    .filter(d => d.inView && !d.inRadius &&
+      (d.dist <= ARROW_MAX_DIST || d.spot.id === selectedSpotId))
+    .sort((a, b) => a.dist - b.dist);
+  updateFrontIndicator(frontCandidates[0] || null);
+
+  // ── Edge arrows: out of view, within ARROW_MAX_DIST ──
+  // Selected spot bypasses ARROW_MAX_DIST limit
+  const edgeData  = data.filter(d => !d.inView &&
+    (d.dist <= ARROW_MAX_DIST || d.spot.id === selectedSpotId));
+  const leftEdge  = edgeData.filter(d => d.rel < 0).sort((a, b) => a.dist - b.dist).slice(0, 4);
+  const rightEdge = edgeData.filter(d => d.rel > 0).sort((a, b) => a.dist - b.dist).slice(0, 4);
+
+  // ── DOM update: remove stale elements ──
+  const calloutIds = new Set(callouts.map(d => d.spot.id));
+  const edgeIds    = new Set([...leftEdge, ...rightEdge].map(d => d.spot.id));
+  overlay.querySelectorAll('.ar-callout').forEach(el => { if (!calloutIds.has(el.dataset.id)) el.remove(); });
+  overlay.querySelectorAll('.ar-edge').forEach(el => { if (!edgeIds.has(el.dataset.id)) el.remove(); });
+
+  // ── Render callouts ──
+  callouts.forEach(d => {
+    let el = overlay.querySelector(`.ar-callout[data-id="${d.spot.id}"]`);
+    if (!el) { el = buildCalloutEl(d.spot); overlay.appendChild(el); }
+    const cx = Math.max(BUBBLE_W / 2 + 6, Math.min(W - BUBBLE_W / 2 - 6, d.screenX));
+    el.style.left = `${cx}px`;
+    el.style.top  = `${d.finalY}px`;
+    refreshCallout(el, d.spot, d.dist);
+  });
+
+  // ── Render edge arrows ──
+  const EDGE_H = 42, EDGE_GAP = 6;
+  [leftEdge, rightEdge].forEach((group, si) => {
+    const side   = si === 0 ? 'left' : 'right';
+    const totalH = group.length * (EDGE_H + EDGE_GAP) - EDGE_GAP;
+    const startY = (H - totalH) / 2;
+    group.forEach((d, i) => {
+      let el = overlay.querySelector(`.ar-edge[data-id="${d.spot.id}"]`);
+      if (!el) { el = buildEdgeEl(d.spot, side); overlay.appendChild(el); }
+      const color = catColor(d.spot.category);
+      el.className             = `ar-edge side-${side}`;
+      el.style.background      = catBg(d.spot.category);
+      el.style.borderLeft      = side === 'left'  ? `2.5px solid ${color}` : '';
+      el.style.borderRight     = side === 'right' ? `2.5px solid ${color}` : '';
+      el.style.top             = `${startY + i * (EDGE_H + EDGE_GAP)}px`;
+      el.querySelector('.ar-edge-icon').style.color = color;
+      el.querySelector('.ar-edge-dist').style.color = color;
+      el.querySelector('.ar-edge-name').textContent = d.spot.name[lang] || d.spot.name.en;
+      el.querySelector('.ar-edge-dist').textContent = `${Math.round(d.dist)}m`;
+    });
+  });
+}
+
+function updateFrontIndicator(d) {
+  const el = document.getElementById('front-indicator');
+  if (!d) {
+    el.classList.remove('visible');
+    return;
+  }
+  const color = catColor(d.spot.category);
+  el.querySelector('.fi-arrow').style.color = color;
+  el.querySelector('.fi-dist').style.color  = color;
+  el.querySelector('.fi-name').textContent  =
+    (d.spot.name[lang] || d.spot.name.en).slice(0, 18);
+  el.querySelector('.fi-dist').textContent  = `${Math.round(d.dist)}m`;
+  el.classList.add('visible');
+}
+
+function buildCalloutEl(spot) {
+  const color = catColor(spot.category);
+  const el = document.createElement('div');
+  el.className  = 'ar-callout';
+  el.dataset.id = spot.id;
+  // inset left strip = category color; outer = drop shadow
+  el.innerHTML  = `
+    <div class="ar-bubble" style="box-shadow: inset 3px 0 0 ${color}, 0 4px 20px rgba(0,0,0,0.14); -webkit-box-shadow: inset 3px 0 0 ${color}, 0 4px 20px rgba(0,0,0,0.14);">
+      <div class="ar-cat">
+        <span class="ar-cat-icon"></span>
+        <span class="ar-cat-label"></span>
+      </div>
+      <div class="ar-spot-name"></div>
+      <div class="ar-spot-desc"></div>
+      <div class="ar-spot-dist"></div>
+    </div>
+    <div class="ar-stem" style="background: linear-gradient(180deg, ${color}88, transparent);"></div>
+    <div class="ar-stem-dot" style="background: ${color}88;"></div>
+  `;
+  el.addEventListener('click', () => {
+    Analytics.onBubbleTap(spot.id);
+    const s    = spots.find(s => s.id === spot.id);
+    const dist = userPos ? haversine(userPos.lat, userPos.lng, s.lat, s.lng) : null;
+    openModal(s, dist);
+  });
+  return el;
+}
+
+function refreshCallout(el, spot, dist) {
+  el.querySelector('.ar-cat-icon').textContent  = CAT_ICON_MAP[spot.category] || CAT_ICON_MAP.default;
+  el.querySelector('.ar-cat-label').textContent = tCat(spot.category || 'default');
+  el.querySelector('.ar-spot-name').textContent = spot.name[lang] || spot.name.en;
+  const desc = spot.description[lang] || spot.description.en || '';
+  el.querySelector('.ar-spot-desc').textContent = firstSentence(desc);
+  el.querySelector('.ar-spot-dist').textContent = `${Math.round(dist)}m`;
+}
+
+function buildEdgeEl(spot, side) {
+  const el = document.createElement('div');
+  el.className  = `ar-edge side-${side}`;
+  el.dataset.id = spot.id;
+  el.innerHTML  = `
+    <span class="ar-edge-icon">${side === 'left' ? '◀' : '▶'}</span>
+    <span class="ar-edge-info">
+      <span class="ar-edge-name"></span>
+      <span class="ar-edge-dist"></span>
+    </span>
+  `;
+  el.addEventListener('click', () => {
+    const s    = spots.find(s => s.id === spot.id);
+    const dist = userPos ? haversine(userPos.lat, userPos.lng, s.lat, s.lng) : null;
+    openModal(s, dist);
+  });
+  return el;
+}
+
+function clearAROverlay() {
+  const overlay = document.getElementById('ar-overlay');
+  if (overlay) overlay.innerHTML = '';
+  document.getElementById('front-indicator')?.classList.remove('visible');
+}
+
+// ─────────────────────────────────────────────────────────
+//  Route Recording
+// ─────────────────────────────────────────────────────────
+let isRecording  = false;
+let recPoints    = [];
+let recStartTime = 0;
+let recInterval  = null;   // 5s GPS log timer
+let recTickTimer = null;   // 1s UI elapsed timer
+let recElapsed   = 0;
+
+function toggleRecording() {
+  if (isRecording) stopRecording(); else startRecording();
+}
+
+function startRecording() {
+  if (!userPos) {
+    alert('GPS not yet available — please wait for a GPS fix.');
+    return;
+  }
+  isRecording  = true;
+  recPoints    = [];
+  recStartTime = Date.now();
+  recElapsed   = 0;
+
+  logRecPoint();
+  recInterval  = setInterval(logRecPoint, 5000);
+  recTickTimer = setInterval(() => { recElapsed++; updateRecBtn(); }, 1000);
+  updateRecBtn();
+}
+
+function logRecPoint() {
+  if (!userPos) return;
+  recPoints.push({ lat: userPos.lat, lng: userPos.lng, t: Date.now() });
+}
+
+function stopRecording() {
+  clearInterval(recInterval);
+  clearInterval(recTickTimer);
+  recInterval = recTickTimer = null;
+  isRecording = false;
+  updateRecBtn();
+  if (recPoints.length === 0) return;
+  showRouteSaveDialog();
+}
+
+function updateRecBtn() {
+  const btn = document.getElementById('rec-btn');
+  if (isRecording) {
+    btn.classList.add('recording');
+    const mm = String(Math.floor(recElapsed / 60)).padStart(2, '0');
+    const ss = String(recElapsed % 60).padStart(2, '0');
+    document.getElementById('rec-dot').textContent   = '■';
+    document.getElementById('rec-label').textContent = 'STOP';
+    let timerEl = document.getElementById('rec-timer');
+    if (!timerEl) {
+      timerEl    = document.createElement('span');
+      timerEl.id = 'rec-timer';
+      btn.appendChild(timerEl);
+    }
+    timerEl.textContent = `${mm}:${ss}`;
+  } else {
+    btn.classList.remove('recording');
+    document.getElementById('rec-dot').textContent   = '●';
+    document.getElementById('rec-label').textContent = 'REC';
+    const timerEl = document.getElementById('rec-timer');
+    if (timerEl) timerEl.remove();
+  }
+}
+
+function calcRecStats() {
+  let dist = 0;
+  for (let i = 1; i < recPoints.length; i++) {
+    dist += haversine(
+      recPoints[i-1].lat, recPoints[i-1].lng,
+      recPoints[i].lat,   recPoints[i].lng
+    );
+  }
+  const dur     = Math.round((Date.now() - recStartTime) / 1000);
+  const visited = spots.filter(spot =>
+    recPoints.some(p => haversine(p.lat, p.lng, spot.lat, spot.lng) <= (spot.radius || 50))
+  );
+  return { dist: Math.round(dist), dur, visited };
+}
+
+function showRouteSaveDialog() {
+  const { dist, dur, visited } = calcRecStats();
+  const mm = Math.floor(dur / 60), ss = dur % 60;
+  const distLabel = dist >= 1000 ? `${(dist / 1000).toFixed(2)} km` : `${dist} m`;
+  document.getElementById('route-modal-stats').textContent =
+    `${mm}min ${ss}s · ${distLabel} · ${visited.length} spot${visited.length !== 1 ? 's' : ''}`;
+  document.getElementById('route-name-input').value = '';
+  document.getElementById('route-step-name').style.display  = '';
+  document.getElementById('route-step-share').style.display = 'none';
+  const saveBtn = document.querySelector('#route-step-name .route-btn.primary');
+  saveBtn.textContent = 'Save & Share';
+  saveBtn.disabled    = false;
+  document.getElementById('route-modal').classList.add('open');
+  setTimeout(() => document.getElementById('route-name-input').focus(), 100);
+}
+
+function cancelRouteSave() {
+  document.getElementById('route-modal').classList.remove('open');
+  recPoints = [];
+}
+
+function closeRouteModal() {
+  document.getElementById('route-modal').classList.remove('open');
+  recPoints = [];
+}
+
+function handleRouteModalBg(e) {
+  if (e.target.id === 'route-modal') cancelRouteSave();
+}
+
+async function saveRoute() {
+  const name    = document.getElementById('route-name-input').value.trim() || 'My Route';
+  const saveBtn = document.querySelector('#route-step-name .route-btn.primary');
+  saveBtn.textContent = 'Saving…';
+  saveBtn.disabled    = true;
+
+  const { dist, dur, visited } = calcRecStats();
+  const route = {
+    name,
+    createdAt:    new Date().toISOString(),
+    startTime:    recStartTime,
+    endTime:      Date.now(),
+    duration:     dur,
+    distance:     dist,
+    points:       recPoints,
+    spotsVisited: visited.map(s => s.id)
+  };
+
+  try {
+    const r    = await fetch('routes.json', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(route)
+    });
+    const data = await r.json();
+    if (!data.id) throw new Error(data.error || 'Unknown error');
+
+    const url = `${location.origin}/route.html?id=${data.id}`;
+    document.getElementById('route-saved-name').textContent = name;
+    document.getElementById('route-share-url').value        = url;
+    document.getElementById('route-step-name').style.display  = 'none';
+    document.getElementById('route-step-share').style.display = '';
+  } catch(e) {
+    console.error('Route save failed:', e);
+    alert('Failed to save route: ' + e.message);
+    saveBtn.textContent = 'Save & Share';
+    saveBtn.disabled    = false;
+  }
+}
+
+async function copyRouteUrl() {
+  const url     = document.getElementById('route-share-url').value;
+  const copyBtn = document.querySelector('#route-step-share .route-btn.primary');
+  try {
+    await navigator.clipboard.writeText(url);
+    copyBtn.textContent = 'Copied!';
+    setTimeout(() => { copyBtn.textContent = 'Copy URL'; }, 2000);
+  } catch {
+    document.getElementById('route-share-url').select();
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Analytics  (background collection — does not block AR)
+// ─────────────────────────────────────────────────────────
+const Analytics = (() => {
+  function uuid() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+      return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+
+  const SESSION_ID    = uuid();
+  const SESSION_START = new Date().toISOString();
+
+  let pending       = [];          // unsent events buffer
+  let approached    = new Set();   // spot IDs currently inside radius
+  let lastPos       = null;        // {lat,lng} of last GPS fix
+  let dwellStart    = null;        // timestamp when dwell began
+  let dwellPos      = null;        // {lat,lng} where dwell started
+  let modalSpotId   = null;
+  let modalOpenAt   = null;
+
+  function push(ev) { pending.push(ev); }
+
+  // ── GPS + dwell + approach ─────────────────────────────
+  function onGPS(pos) {
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
+    const acc = Math.round(pos.coords.accuracy);
+    push({ type:'gps', lat, lng, accuracy:acc, t:new Date().toISOString() });
+
+    // Dwell detection: < 20 m movement for ≥ 5 s
+    if (lastPos) {
+      const moved = haversine(lastPos.lat, lastPos.lng, lat, lng);
+      if (moved < 20) {
+        if (!dwellStart) { dwellStart = Date.now(); dwellPos = { lat, lng }; }
+      } else {
+        if (dwellStart) {
+          const secs = Math.round((Date.now() - dwellStart) / 1000);
+          if (secs >= 5 && dwellPos)
+            push({ type:'dwell', lat:dwellPos.lat, lng:dwellPos.lng,
+                   startT:new Date(dwellStart).toISOString(),
+                   endT:new Date().toISOString(), secs });
+        }
+        dwellStart = null; dwellPos = null;
+      }
+    }
+    lastPos = { lat, lng };
+
+    // Spot approach: fire once on entry, reset on exit
+    spots.forEach(spot => {
+      const d = haversine(lat, lng, spot.lat, spot.lng);
+      if (d <= (spot.radius || 50) && !approached.has(spot.id)) {
+        approached.add(spot.id);
+        push({ type:'spot_approach', spotId:spot.id, dist:Math.round(d), t:new Date().toISOString() });
+      } else if (d > (spot.radius || 50)) {
+        approached.delete(spot.id);
+      }
+    });
+  }
+
+  // ── UI events ──────────────────────────────────────────
+  function onBubbleTap(spotId) { push({ type:'bubble_tap', spotId, t:new Date().toISOString() }); }
+  function onChipTap(spotId)   { push({ type:'chip_tap',   spotId, t:new Date().toISOString() }); }
+
+  function onModalOpen(spotId) { modalSpotId = spotId; modalOpenAt = Date.now(); }
+  function onModalClose() {
+    if (modalOpenAt && modalSpotId) {
+      const secs = Math.round((Date.now() - modalOpenAt) / 1000);
+      push({ type:'modal_view', spotId:modalSpotId,
+             openT:new Date(modalOpenAt).toISOString(), closeT:new Date().toISOString(), secs });
+    }
+    modalSpotId = null; modalOpenAt = null;
+  }
+
+  // ── Flush: send pending events to server ───────────────
+  async function flush() {
+    if (!pending.length) return;
+    const batch = [...pending];
+    console.log('[Analytics] flushing', batch.length, 'event(s)');
+    try {
+      const r = await fetch('/analytics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: SESSION_ID, startTime: SESSION_START,
+          endTime: new Date().toISOString(), lang,
+          events: batch
+        })
+      });
+      if (r.ok) {
+        pending = pending.filter(e => !batch.includes(e));
+        console.log('[Analytics] flush OK, pending:', pending.length);
+      } else {
+        console.warn('[Analytics] flush failed HTTP', r.status);
+      }
+    } catch(e) {
+      console.warn('[Analytics] flush error (will retry):', e.message);
+    }
+  }
+
+  function init() {
+    // Push session_start immediately so the session is registered on first flush
+    push({ type: 'session_start', t: SESSION_START });
+    console.log('[Analytics] session started:', SESSION_ID);
+
+    // First flush after 1 s (registers the session quickly without waiting 5 s)
+    setTimeout(flush, 1000);
+
+    // Then flush every 5 s
+    setInterval(flush, 5000);
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flush();
+    });
+    window.addEventListener('pagehide', flush);
+  }
+
+  // Expose flush so hooks can call it directly if needed
+  return { init, onGPS, onBubbleTap, onChipTap, onModalOpen, onModalClose, flush };
+})();
+
+// ─────────────────────────────────────────────────────────
+//  Boot
+// ─────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  // Apply saved language
+  document.querySelectorAll('#lang-switcher button')
+    .forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+  document.getElementById('nearby-label').textContent = t('nearby');
+
+  Analytics.init();
+  await loadSpots();
+  refreshChips();
+  initPermissionsAndAR();
+
+  // Compass init — iOS 13+ requires a user-gesture to grant DeviceOrientation permission
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    // Show toast so user knows to tap
+    document.getElementById('compass-toast').classList.add('show');
+    document.body.addEventListener('click', async function grantOrientation() {
+      document.body.removeEventListener('click', grantOrientation);
+      try {
+        const perm = await DeviceOrientationEvent.requestPermission();
+        if (perm === 'granted') initCompass();
+      } catch(e) { initCompass(); } // try anyway on error
+    }, { once: true });
+  } else {
+    // Android / desktop — no permission needed
+    initCompass();
+  }
+});
+</script>
+</body>
+</html>

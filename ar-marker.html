@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>AR Spot – Yamadera</title>
+
+  <!--
+    jsQR: reads QR codes from canvas ImageData.
+    Works natively on iOS Safari (no WASM, no import maps needed).
+    The AR overlay is positioned using the QR code's detected corner coordinates.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+  <style>
+    :root { --accent: #4fc3f7; --accent-dark: #0288d1; --bg: #f8f9fa; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden;
+                 background: #000; font-family: system-ui, -apple-system, sans-serif; }
+
+    /* ── Live camera feed ── */
+    #camera {
+      position: fixed; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; z-index: 0;
+    }
+
+    /* ── Loading screen ── */
+    #loading {
+      position: fixed; inset: 0; z-index: 50;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: var(--bg); color: #1a1a2e; gap: 18px; padding: 32px; text-align: center;
+    }
+    .spinner {
+      width: 48px; height: 48px; border-radius: 50%;
+      border: 4px solid rgba(79,195,247,.25); border-top-color: var(--accent);
+      animation: spin .85s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #load-title { font-size: 18px; font-weight: 700; color: #1a1a2e; }
+    #load-msg   { font-size: 13px; color: #666; max-width: 280px; line-height: 1.55; }
+    #load-bar-wrap { width: 220px; height: 4px; background: rgba(0,0,0,.1);
+                     border-radius: 2px; overflow: hidden; }
+    #load-bar      { height: 100%; background: var(--accent); border-radius: 2px;
+                     width: 0%; transition: width .3s ease; }
+
+    /* ── AR overlay card (HTML, positioned above detected QR) ── */
+    #ar-card {
+      position: fixed; z-index: 20;
+      transform: translate(-50%, -100%);
+      pointer-events: auto; cursor: pointer;
+      opacity: 0; transition: opacity .25s ease;
+      display: none;
+    }
+    #ar-card.visible { opacity: 1; display: block; }
+    .ar-bubble {
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid rgba(79,195,247,.5); border-radius: 16px;
+      padding: 11px 15px 10px; min-width: 175px; max-width: 240px;
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      box-shadow: 0 4px 20px rgba(0,0,0,.18), 0 0 0 .5px rgba(79,195,247,.2);
+    }
+    .ar-cat { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+    #ar-icon      { font-size: 15px; line-height: 1; flex-shrink: 0; }
+    #ar-cat-label { font-size: 9px; text-transform: uppercase; letter-spacing: .12em;
+                    color: var(--accent-dark); font-weight: 700; }
+    #ar-name { font-size: 14px; font-weight: 800; color: #1a1a2e;
+               margin-bottom: 4px; line-height: 1.2; }
+    #ar-desc { font-size: 10px; color: #555; line-height: 1.5;
+               display: -webkit-box; -webkit-line-clamp: 3;
+               -webkit-box-orient: vertical; overflow: hidden; }
+    /* Stem from bubble down to QR target */
+    .ar-stem {
+      width: 2px; height: 18px; margin: 0 auto;
+      background: linear-gradient(180deg, rgba(79,195,247,.6), transparent);
+    }
+    .ar-stem-dot {
+      width: 7px; height: 7px; border-radius: 50%; margin: 0 auto;
+      background: rgba(79,195,247,.6); box-shadow: 0 0 6px rgba(79,195,247,.4);
+    }
+
+    /* ── QR corner highlight (drawn on overlay canvas) ── */
+    #highlight-canvas {
+      position: fixed; inset: 0; width: 100%; height: 100%;
+      z-index: 10; pointer-events: none;
+    }
+
+    /* ── Scan hint ── */
+    #scan-hint {
+      display: none; position: fixed; bottom: 88px; left: 50%;
+      transform: translateX(-50%); z-index: 25;
+      background: rgba(255,255,255,.92); border: 1px solid rgba(0,0,0,.12);
+      border-radius: 24px; padding: 9px 20px;
+      font-size: 13px; color: #1a1a2e; white-space: nowrap;
+      transition: opacity .4s; pointer-events: none;
+      box-shadow: 0 2px 12px rgba(0,0,0,.1);
+    }
+
+    /* ── Top bar ── */
+    #top-bar {
+      display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 25;
+      padding: 14px 16px 10px;
+      background: linear-gradient(180deg, rgba(255,255,255,.92) 0%, transparent 100%);
+      align-items: center; justify-content: space-between;
+    }
+    #back-link { color: var(--accent-dark); text-decoration: none;
+                 font-size: 13px; font-weight: 600; }
+    #lang-bar  { display: flex; gap: 6px; }
+    #lang-bar button {
+      background: rgba(255,255,255,.88); border: 1px solid rgba(0,0,0,.14);
+      color: #1a1a2e; padding: 4px 10px; border-radius: 7px;
+      font-size: 11px; font-weight: 600; cursor: pointer;
+    }
+    #lang-bar button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* ── Error screen ── */
+    #error-screen {
+      display: none; position: fixed; inset: 0; z-index: 50;
+      flex-direction: column; align-items: center; justify-content: center;
+      background: var(--bg); padding: 32px; text-align: center; gap: 14px;
+    }
+    #err-icon  { font-size: 48px; }
+    #err-title { font-size: 20px; font-weight: 700; color: #1a1a2e; }
+    #err-msg   { font-size: 14px; color: #555; line-height: 1.65;
+                 white-space: pre-line; max-width: 320px; }
+    .err-link  { color: var(--accent-dark); text-decoration: none;
+                 font-size: 14px; font-weight: 600; }
+
+    /* ── Detail modal (tap AR card) ── */
+    #detail-modal {
+      display: none; position: fixed; inset: 0; z-index: 40;
+      background: rgba(0,0,0,.45); backdrop-filter: blur(6px);
+      align-items: flex-end; justify-content: center;
+    }
+    #detail-modal.open { display: flex; }
+    #detail-card {
+      background: #ffffff; border: 1px solid rgba(79,195,247,.25);
+      border-radius: 22px 22px 0 0; padding: 24px 22px 52px;
+      width: 100%; max-width: 520px; animation: slideUp .22s ease;
+      box-shadow: 0 -4px 24px rgba(0,0,0,.1);
+    }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    #detail-handle { width: 40px; height: 4px; background: rgba(0,0,0,.14);
+                     border-radius: 2px; margin: 0 auto 18px; }
+    #detail-close  { float: right; background: rgba(0,0,0,.07); border: none;
+                     color: #333; width: 30px; height: 30px; border-radius: 50%;
+                     cursor: pointer; font-size: 15px; line-height: 30px; text-align: center; }
+    #detail-cat    { font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+                     color: var(--accent-dark); margin-bottom: 4px; }
+    #detail-name   { font-size: 22px; font-weight: 700; color: #1a1a2e; margin-bottom: 14px; }
+    #detail-desc   { font-size: 15px; color: #333; line-height: 1.65; }
+  </style>
+</head>
+<body>
+
+<!-- Loading screen -->
+<div id="loading">
+  <div class="spinner"></div>
+  <div id="load-title">⛩ Yamadera AR</div>
+  <div id="load-msg">Loading…</div>
+  <div id="load-bar-wrap"><div id="load-bar"></div></div>
+</div>
+
+<!-- Live camera feed -->
+<video id="camera" playsinline autoplay muted></video>
+
+<!-- Canvas for QR corner highlight (drawn each frame) -->
+<canvas id="highlight-canvas"></canvas>
+
+<!-- AR card (HTML, positioned above detected QR code) -->
+<div id="ar-card">
+  <div class="ar-bubble">
+    <div class="ar-cat">
+      <span id="ar-icon"></span>
+      <span id="ar-cat-label"></span>
+    </div>
+    <div id="ar-name"></div>
+    <div id="ar-desc"></div>
+  </div>
+  <div class="ar-stem"></div>
+  <div class="ar-stem-dot"></div>
+</div>
+
+<!-- Scan hint -->
+<div id="scan-hint"><span id="scan-text">Point camera at marker</span></div>
+
+<!-- Top bar -->
+<div id="top-bar">
+  <a href="/" id="back-link">← AR Viewer</a>
+  <div id="lang-bar">
+    <button onclick="setLang('en')">EN</button>
+    <button onclick="setLang('jp')">JP</button>
+    <button onclick="setLang('zh')">ZH</button>
+  </div>
+</div>
+
+<!-- Error screen -->
+<div id="error-screen">
+  <div id="err-icon">⚠️</div>
+  <div id="err-title">Error</div>
+  <div id="err-msg"></div>
+  <a href="admin.html" class="err-link" id="err-admin-link">→ Open Admin Panel</a>
+</div>
+
+<!-- Detail modal (tap AR card for full text) -->
+<div id="detail-modal" onclick="if(event.target===this)closeDetail()">
+  <div id="detail-card">
+    <div id="detail-handle"></div>
+    <button id="detail-close" onclick="closeDetail()">✕</button>
+    <div id="detail-cat"></div>
+    <div id="detail-name"></div>
+    <div id="detail-desc"></div>
+  </div>
+</div>
+
+<!-- Hidden canvas for jsQR frame processing -->
+<canvas id="proc-canvas" style="display:none"></canvas>
+
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────────────
+//  i18n
+// ─────────────────────────────────────────────────────────
+const MSGS = {
+  en: {
+    loading:  'Loading spot data…',
+    camStart: 'Starting camera…',
+    scan:     '📷 Point camera at the printed QR marker',
+    noQR:     'QR not yet generated for this spot.\nOpen Admin Panel → "📱 QR" → "Save & Print".',
+    notFound: 'Spot not found.',
+    camErr:   'Camera access denied.\nAllow camera permission and reload the page.',
+    loadErr:  'Failed to load spot data.',
+    cat: { gate:'Gate', warning:'Warning', viewpoint:'Viewpoint', wildlife:'Wildlife', default:'Spot' }
+  },
+  jp: {
+    loading:  'スポットデータを読み込み中…',
+    camStart: 'カメラを起動中…',
+    scan:     '📷 印刷したQRマーカーにカメラをかざしてください',
+    noQR:     'このスポットのQRがまだ生成されていません。\n管理画面 → 「📱 QR」→「Save & Print」を実行してください。',
+    notFound: 'スポットが見つかりません。',
+    camErr:   'カメラへのアクセスが拒否されました。\n許可してリロードしてください。',
+    loadErr:  'スポットデータの読み込みに失敗しました。',
+    cat: { gate:'入口', warning:'注意', viewpoint:'展望', wildlife:'野生動物', default:'スポット' }
+  },
+  zh: {
+    loading:  '正在加载景点数据…',
+    camStart: '正在启动相机…',
+    scan:     '📷 将相机对准打印的QR标记',
+    noQR:     '此景点尚未生成QR码。\n请在管理面板中点击「📱 QR」→「Save & Print」。',
+    notFound: '未找到景点。',
+    camErr:   '相机访问被拒绝。\n请允许相机权限并重新加载。',
+    loadErr:  '无法加载景点数据。',
+    cat: { gate:'入口', warning:'警告', viewpoint:'观景台', wildlife:'野生动物', default:'景点' }
+  }
+};
+const CAT_ICON = { gate:'⛩', warning:'⚠️', viewpoint:'🔭', wildlife:'🦊', default:'📍' };
+
+let lang = localStorage.getItem('arLang') || 'en';
+let spot     = null;
+let spotId   = null;
+let holdTimer = null;
+let cardVisible = false;
+let tickRunning = false;
+
+function M(k) { return (MSGS[lang]||MSGS.en)[k] || MSGS.en[k]; }
+function tCat(c) { return ((MSGS[lang]||MSGS.en).cat||{})[c] || MSGS.en.cat[c] || c; }
+
+function setLang(l) {
+  lang = l;
+  localStorage.setItem('arLang', l);
+  document.querySelectorAll('#lang-bar button')
+    .forEach(b => b.classList.toggle('active', b.textContent.toLowerCase() === l));
+  document.getElementById('scan-text').textContent = M('scan');
+  if (spot) fillCard();
+}
+
+// ─────────────────────────────────────────────────────────
+//  Loading / error helpers
+// ─────────────────────────────────────────────────────────
+function setLoad(msg, pct) {
+  document.getElementById('load-msg').textContent = msg;
+  document.getElementById('load-bar').style.width = pct + '%';
+}
+
+function showError(msg, hideAdmin) {
+  document.getElementById('loading').style.display      = 'none';
+  document.getElementById('error-screen').style.display = 'flex';
+  document.getElementById('err-msg').textContent        = msg;
+  if (hideAdmin) document.getElementById('err-admin-link').style.display = 'none';
+}
+
+// ─────────────────────────────────────────────────────────
+//  AR card
+// ─────────────────────────────────────────────────────────
+function fillCard() {
+  document.getElementById('ar-icon').textContent      = CAT_ICON[spot.category] || CAT_ICON.default;
+  document.getElementById('ar-cat-label').textContent = tCat(spot.category || 'default');
+  document.getElementById('ar-name').textContent      = spot.name[lang] || spot.name.en;
+  document.getElementById('ar-desc').textContent      =
+    spot.description[lang] || spot.description.en || '';
+}
+
+function showCard(loc) {
+  clearTimeout(holdTimer); holdTimer = null;
+  if (!cardVisible) {
+    fillCard();
+    document.getElementById('ar-card').classList.add('visible');
+    document.getElementById('scan-hint').style.opacity = '0';
+    cardVisible = true;
+  }
+  positionCard(loc);
+}
+
+function scheduleHide() {
+  if (holdTimer || !cardVisible) return;
+  holdTimer = setTimeout(() => {
+    document.getElementById('ar-card').classList.remove('visible');
+    document.getElementById('scan-hint').style.opacity = '1';
+    cardVisible = false;
+    holdTimer   = null;
+    clearHighlight();
+  }, 3000);
+}
+
+// ─────────────────────────────────────────────────────────
+//  Overlay positioning (QR corner → screen coords)
+// ─────────────────────────────────────────────────────────
+function videoToScreen(vx, vy, video) {
+  const vw = video.videoWidth,  vh = video.videoHeight;
+  const sw = window.innerWidth, sh = window.innerHeight;
+  const scale = Math.max(sw / vw, sh / vh);
+  return {
+    x: vx * scale - (vw * scale - sw) / 2,
+    y: vy * scale - (vh * scale - sh) / 2
+  };
+}
+
+function positionCard(loc) {
+  const video = document.getElementById('camera');
+  const tl = videoToScreen(loc.topLeftCorner.x,     loc.topLeftCorner.y,     video);
+  const tr = videoToScreen(loc.topRightCorner.x,    loc.topRightCorner.y,    video);
+  const bl = videoToScreen(loc.bottomLeftCorner.x,  loc.bottomLeftCorner.y,  video);
+  const br = videoToScreen(loc.bottomRightCorner.x, loc.bottomRightCorner.y, video);
+
+  const cx    = (tl.x + tr.x + bl.x + br.x) / 4;
+  const topY  = (tl.y + tr.y) / 2;
+  const qrH   = (bl.y + br.y) / 2 - topY;
+
+  const card  = document.getElementById('ar-card');
+  const cardH = card.offsetHeight || 140;
+  const cardW = card.offsetWidth  || 220;
+  const sw = window.innerWidth, sh = window.innerHeight;
+
+  card.style.left = Math.max(cardW/2 + 8, Math.min(sw - cardW/2 - 8, cx))  + 'px';
+  card.style.top  = Math.max(cardH + 20,  Math.min(sh - 20, topY - qrH * 0.2)) + 'px';
+}
+
+// ─────────────────────────────────────────────────────────
+//  QR corner highlight drawn on overlay canvas
+// ─────────────────────────────────────────────────────────
+function drawHighlight(loc, video) {
+  const hc  = document.getElementById('highlight-canvas');
+  hc.width  = window.innerWidth;
+  hc.height = window.innerHeight;
+  const ctx = hc.getContext('2d');
+
+  const pts = [
+    videoToScreen(loc.topLeftCorner.x,     loc.topLeftCorner.y,     video),
+    videoToScreen(loc.topRightCorner.x,    loc.topRightCorner.y,    video),
+    videoToScreen(loc.bottomRightCorner.x, loc.bottomRightCorner.y, video),
+    videoToScreen(loc.bottomLeftCorner.x,  loc.bottomLeftCorner.y,  video)
+  ];
+
+  ctx.clearRect(0, 0, hc.width, hc.height);
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  pts.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.closePath();
+  ctx.strokeStyle = 'rgba(79,195,247,0.7)';
+  ctx.lineWidth   = 2.5;
+  ctx.stroke();
+  ctx.fillStyle   = 'rgba(79,195,247,0.08)';
+  ctx.fill();
+}
+
+function clearHighlight() {
+  const hc  = document.getElementById('highlight-canvas');
+  const ctx = hc.getContext('2d');
+  ctx.clearRect(0, 0, hc.width, hc.height);
+}
+
+// ─────────────────────────────────────────────────────────
+//  Detail modal
+// ─────────────────────────────────────────────────────────
+function openDetail() {
+  if (!spot) return;
+  document.getElementById('detail-cat').textContent  =
+    `${CAT_ICON[spot.category]||'📍'} ${tCat(spot.category||'default')}`;
+  document.getElementById('detail-name').textContent = spot.name[lang] || spot.name.en;
+  document.getElementById('detail-desc').textContent =
+    spot.description[lang] || spot.description.en || '';
+  document.getElementById('detail-modal').classList.add('open');
+}
+function closeDetail() { document.getElementById('detail-modal').classList.remove('open'); }
+
+// ─────────────────────────────────────────────────────────
+//  jsQR detection loop
+// ─────────────────────────────────────────────────────────
+function startDetectionLoop(video) {
+  const proc = document.getElementById('proc-canvas');
+  const ctx  = proc.getContext('2d', { willReadFrequently: true });
+
+  function tick() {
+    if (video.readyState < video.HAVE_ENOUGH_DATA) {
+      requestAnimationFrame(tick);
+      return;
+    }
+
+    proc.width  = video.videoWidth;
+    proc.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+
+    const imgData = ctx.getImageData(0, 0, proc.width, proc.height);
+    const code    = jsQR(imgData.data, imgData.width, imgData.height, {
+      inversionAttempts: 'dontInvert'
+    });
+
+    if (code) {
+      // Check the QR contains our marker URL for this spot
+      try {
+        const url     = new URL(code.data);
+        const qrId    = url.searchParams.get('id');
+        if (qrId === spotId) {
+          clearTimeout(holdTimer);
+          holdTimer = null;
+          showCard(code.location);
+          drawHighlight(code.location, video);
+        }
+      } catch(e) { /* not a URL */ }
+    } else {
+      scheduleHide();
+    }
+
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// ─────────────────────────────────────────────────────────
+//  Main init
+// ─────────────────────────────────────────────────────────
+async function init() {
+  // Apply saved language
+  document.querySelectorAll('#lang-bar button')
+    .forEach(b => b.classList.toggle('active', b.textContent.toLowerCase() === lang));
+  document.getElementById('scan-text').textContent = M('scan');
+
+  spotId = new URLSearchParams(location.search).get('id');
+  if (!spotId) { showError('No spot ID in URL.', true); return; }
+
+  // 1. Load spot data
+  setLoad(M('loading'), 15);
+  let spots;
+  try {
+    const r = await fetch('spots.json');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    spots = await r.json();
+  } catch(e) { showError(M('loadErr') + '\n' + e.message, true); return; }
+
+  spot = spots.find(s => s.id === spotId);
+  if (!spot)       { showError(M('notFound'), true); return; }
+  if (!spot.hasQR) { showError(M('noQR'));           return; }
+
+  document.title = `${spot.name.en || spotId} – Yamadera AR`;
+
+  // 2. Start camera
+  setLoad(M('camStart'), 50);
+  const video = document.getElementById('camera');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    await new Promise(res => { video.onloadedmetadata = res; });
+    video.play();
+  } catch(e) {
+    console.error('Camera error:', e);
+    showError(M('camErr'), true);
+    return;
+  }
+
+  // 3. Show AR UI
+  setLoad('Ready', 100);
+  document.getElementById('loading').style.display  = 'none';
+  document.getElementById('scan-hint').style.display = 'flex';
+  document.getElementById('top-bar').style.display   = 'flex';
+  document.getElementById('ar-card').addEventListener('click', openDetail);
+  setLang(lang);
+
+  // 4. Start jsQR detection loop
+  startDetectionLoop(video);
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Route – AR Tourism</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    :root {
+      --accent: #4fc3f7;
+      --bg:     #080f1e;
+      --card:   #111e35;
+      --border: #1e2e4a;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      min-height: 100%; background: var(--bg);
+      font-family: system-ui, -apple-system, sans-serif; color: #fff;
+    }
+
+    /* ── Header ── */
+    #header {
+      padding: 52px 24px 24px;
+      background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
+      border-bottom: 1px solid var(--border);
+    }
+    #back-link {
+      display: inline-block; margin-bottom: 14px;
+      color: var(--accent); text-decoration: none; font-size: 13px;
+    }
+    #back-link:hover { text-decoration: underline; }
+    #route-name { font-size: 26px; font-weight: 800; margin-bottom: 4px; }
+    #route-date { font-size: 13px; color: #5566aa; }
+
+    /* ── Stats bar ── */
+    #stats-bar {
+      display: flex; border-bottom: 1px solid var(--border);
+    }
+    .stat {
+      flex: 1; padding: 18px 12px; text-align: center;
+      border-right: 1px solid var(--border);
+    }
+    .stat:last-child { border-right: none; }
+    .stat-val { font-size: 22px; font-weight: 700; color: var(--accent); }
+    .stat-key { font-size: 11px; color: #5566aa; text-transform: uppercase;
+                letter-spacing: 0.1em; margin-top: 3px; }
+
+    /* ── Map ── */
+    #map { height: 52vh; width: 100%; }
+
+    /* ── Spots section ── */
+    #spots-section { padding: 24px 20px 52px; }
+    #spots-section h2 { font-size: 14px; text-transform: uppercase;
+                        letter-spacing: 0.1em; color: #5566aa; margin-bottom: 14px; }
+    .spot-row {
+      display: flex; align-items: center; gap: 14px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+    }
+    .spot-icon { font-size: 20px; flex-shrink: 0; }
+    .spot-info h3 { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+    .spot-info p  { font-size: 12px; color: #5566aa; }
+    .spot-badge {
+      margin-left: auto; flex-shrink: 0;
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+      background: rgba(79,195,247,0.12); color: var(--accent);
+      padding: 3px 10px; border-radius: 10px;
+    }
+
+    /* ── Error / loading ── */
+    #status {
+      display: none; padding: 80px 24px; text-align: center; color: #5566aa;
+    }
+    #status.show { display: block; }
+    #status h2 { font-size: 20px; color: #fff; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <a href="/" id="back-link">← Back to AR</a>
+  <h1 id="route-name">Loading…</h1>
+  <p id="route-date"></p>
+</div>
+
+<div id="stats-bar">
+  <div class="stat">
+    <div class="stat-val" id="stat-duration">–</div>
+    <div class="stat-key">Duration</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val" id="stat-distance">–</div>
+    <div class="stat-key">Distance</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val" id="stat-spots">–</div>
+    <div class="stat-key">Spots</div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<div id="spots-section">
+  <h2>Spots Visited</h2>
+  <div id="spots-list"></div>
+</div>
+
+<div id="status">
+  <h2 id="status-title">Route not found</h2>
+  <p id="status-msg">The route you're looking for does not exist or has been removed.</p>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+'use strict';
+
+const CAT_ICON = { gate:'⛩', warning:'⚠️', viewpoint:'🔭', wildlife:'🦊', default:'📍' };
+const CAT_LABEL = { gate:'Gate', warning:'Warning', viewpoint:'Viewpoint', wildlife:'Wildlife', default:'Spot' };
+
+function fmtDuration(s) {
+  if (s < 60)   return `${s}s`;
+  const m = Math.floor(s / 60), r = s % 60;
+  if (m < 60)   return r > 0 ? `${m}m ${r}s` : `${m}m`;
+  const h = Math.floor(m / 60), rm = m % 60;
+  return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
+}
+
+function fmtDistance(m) {
+  return m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${m} m`;
+}
+
+function fmtDate(iso) {
+  return new Date(iso).toLocaleString(undefined, {
+    year:'numeric', month:'short', day:'numeric',
+    hour:'2-digit', minute:'2-digit'
+  });
+}
+
+function showError(title, msg) {
+  document.getElementById('header').style.display       = 'none';
+  document.getElementById('stats-bar').style.display    = 'none';
+  document.getElementById('map').style.display          = 'none';
+  document.getElementById('spots-section').style.display = 'none';
+  document.getElementById('status-title').textContent   = title;
+  document.getElementById('status-msg').textContent     = msg;
+  document.getElementById('status').classList.add('show');
+}
+
+async function init() {
+  const id = new URLSearchParams(location.search).get('id');
+  if (!id) { showError('No route ID', 'Please open a valid route share link.'); return; }
+
+  let routes, spots;
+  try {
+    const [rr, rs] = await Promise.all([
+      fetch('routes.json'),
+      fetch('spots.json')
+    ]);
+    if (!rr.ok) throw new Error('routes.json not found');
+    routes = await rr.json();
+    spots  = rs.ok ? await rs.json() : [];
+  } catch(e) {
+    showError('Could not load data', e.message);
+    return;
+  }
+
+  const route = routes.find(r => r.id === id);
+  if (!route) { showError('Route not found', `No route with ID "${id}" exists.`); return; }
+
+  // ── Header & stats ────────────────────────────────────
+  document.title = `${route.name} – AR Tourism`;
+  document.getElementById('route-name').textContent     = route.name;
+  document.getElementById('route-date').textContent     = fmtDate(route.createdAt);
+  document.getElementById('stat-duration').textContent  = fmtDuration(route.duration || 0);
+  document.getElementById('stat-distance').textContent  = fmtDistance(route.distance || 0);
+  document.getElementById('stat-spots').textContent     = (route.spotsVisited || []).length;
+
+  // ── Leaflet map ───────────────────────────────────────
+  const map = L.map('map', { zoomControl: true });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19
+  }).addTo(map);
+
+  const pts = (route.points || []).map(p => [p.lat, p.lng]);
+
+  if (pts.length > 0) {
+    // Route polyline
+    const poly = L.polyline(pts, { color: '#4fc3f7', weight: 4, opacity: 0.85 }).addTo(map);
+    map.fitBounds(poly.getBounds(), { padding: [30, 30] });
+
+    // Start marker (green)
+    L.circleMarker(pts[0], {
+      radius: 9, color: '#fff', weight: 2,
+      fillColor: '#66bb6a', fillOpacity: 1
+    }).bindPopup('<b>Start</b>').addTo(map);
+
+    // End marker (red) — only if different from start
+    if (pts.length > 1) {
+      L.circleMarker(pts[pts.length - 1], {
+        radius: 9, color: '#fff', weight: 2,
+        fillColor: '#ef5350', fillOpacity: 1
+      }).bindPopup('<b>End</b>').addTo(map);
+    }
+  } else {
+    map.setView([35.6812, 139.7671], 13); // fallback centre
+  }
+
+  // Visited spot markers (yellow)
+  (route.spotsVisited || []).forEach(sid => {
+    const spot = spots.find(s => s.id === sid);
+    if (!spot) return;
+    L.circleMarker([spot.lat, spot.lng], {
+      radius: 7, color: '#fff', weight: 2,
+      fillColor: '#ffd54f', fillOpacity: 0.9
+    }).bindPopup(`<b>${spot.name.en}</b><br><small>${CAT_LABEL[spot.category] || 'Spot'}</small>`).addTo(map);
+  });
+
+  // ── Spots visited list ────────────────────────────────
+  const list = document.getElementById('spots-list');
+  if ((route.spotsVisited || []).length === 0) {
+    list.innerHTML = '<p style="color:#5566aa;font-size:14px">No spots recorded on this route.</p>';
+  } else {
+    route.spotsVisited.forEach(sid => {
+      const spot = spots.find(s => s.id === sid);
+      const name = spot ? (spot.name.en || sid) : sid;
+      const cat  = spot ? (spot.category || 'default') : 'default';
+      const desc = spot ? (spot.description.en || '') : '';
+      const row  = document.createElement('div');
+      row.className = 'spot-row';
+      row.innerHTML = `
+        <div class="spot-icon">${CAT_ICON[cat] || CAT_ICON.default}</div>
+        <div class="spot-info">
+          <h3>${name}</h3>
+          ${desc ? `<p>${desc.length > 90 ? desc.slice(0, 90) + '…' : desc}</p>` : ''}
+        </div>
+        <span class="spot-badge">${CAT_LABEL[cat] || 'Spot'}</span>
+      `;
+      list.appendChild(row);
+    });
+  }
+}
+
+init();
+</script>
+</body>
+</html>

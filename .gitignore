@@ -1,0 +1,5 @@
+analytics.json
+__pycache__/
+*.pyc
+.claude/
+
