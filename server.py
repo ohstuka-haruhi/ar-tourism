@@ -11,6 +11,8 @@ import os
 import re
 import secrets
 import sys
+import urllib.request
+import urllib.error
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 PORT = int(os.environ.get('PORT', sys.argv[1] if len(sys.argv) > 1 else 8080))
@@ -142,6 +144,8 @@ class Handler(SimpleHTTPRequestHandler):
         path = self.path.rstrip('/')
         if path == '/analytics':
             self._post_analytics()
+        elif path == '/api/analyze':
+            self._post_analyze()
         elif path == '/' + ROUTES_FILE:
             self._post_route()
         else:
@@ -149,6 +153,107 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(b'{"error":"not found"}')
+
+    def _post_analyze(self):
+        """POST /api/analyze — vision-based road/direction analysis via Claude."""
+        DEFAULT = json.dumps({
+            "direction": "straight",
+            "confidence": 0.5,
+            "road_detected": False,
+            "description": "解析不可"
+        }).encode()
+
+        def respond(data: bytes):
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(data)
+
+        api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+        if not api_key:
+            print('  \033[33m⚠  /api/analyze: ANTHROPIC_API_KEY not set\033[0m')
+            respond(DEFAULT)
+            return
+
+        try:
+            length     = int(self.headers.get('Content-Length', 0))
+            body       = json.loads(self.rfile.read(length))
+            image_b64  = body.get('image', '')
+            if not image_b64:
+                raise ValueError('image field missing')
+
+            prompt = (
+                '以下の画像（カメラ映像の1フレーム）を解析し、'
+                '歩行者の進行方向を判断してください。\n'
+                '回答はJSONのみ（説明不要）:\n'
+                '{"direction":"straight"|"left"|"right"|"arrived",'
+                '"confidence":0.0-1.0,'
+                '"road_detected":true|false,'
+                '"description":"10文字以内の日本語"}\n'
+                'direction定義: straight=直進, left=左折推奨, '
+                'right=右折推奨, arrived=目的地付近\n'
+                'confidence: 判断の確信度\n'
+                'description: 状況の短い説明（例: 直進可能, 左に道あり）'
+            )
+
+            payload = json.dumps({
+                "model": "claude-sonnet-4-6",
+                "max_tokens": 150,
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": image_b64
+                            }
+                        },
+                        {"type": "text", "text": prompt}
+                    ]
+                }]
+            }).encode()
+
+            req = urllib.request.Request(
+                'https://api.anthropic.com/v1/messages',
+                data=payload,
+                headers={
+                    'x-api-key': api_key,
+                    'anthropic-version': '2023-06-01',
+                    'content-type': 'application/json'
+                },
+                method='POST'
+            )
+
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                result = json.loads(resp.read())
+
+            raw = result['content'][0]['text'].strip()
+
+            # JSON を抽出（余分なテキストに対して堅牢に）
+            m = re.search(r'\{[^{}]+\}', raw, re.DOTALL)
+            parsed = json.loads(m.group() if m else raw)
+
+            # フィールドを検証・サニタイズ
+            direction = parsed.get('direction', 'straight')
+            if direction not in ('straight', 'left', 'right', 'arrived'):
+                direction = 'straight'
+            confidence  = max(0.0, min(1.0, float(parsed.get('confidence', 0.5))))
+            road_detected = bool(parsed.get('road_detected', False))
+            description   = str(parsed.get('description', ''))[:10]
+
+            out = json.dumps({
+                "direction":    direction,
+                "confidence":   round(confidence, 3),
+                "road_detected": road_detected,
+                "description":  description
+            }).encode()
+            respond(out)
+
+        except Exception as e:
+            print(f'  \033[31m✗  /api/analyze error: {e}\033[0m')
+            respond(DEFAULT)   # エラー時は straight をデフォルト返却
 
     def _post_analytics(self):
         try:
