@@ -338,6 +338,21 @@
                 max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
     .fi-dist  { font-size: 10px; font-weight: 600; }
 
+    /* ── Vision direction arrow overlay ── */
+    #direction-arrow {
+      position: fixed; top: 72px; left: 50%; transform: translateX(-50%);
+      z-index: 13; pointer-events: none;
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      background: rgba(0,0,0,0.52); backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      border-radius: 18px; padding: 8px 20px 10px;
+      opacity: 0; transition: opacity 0.35s ease;
+      min-width: 64px; text-align: center;
+    }
+    #direction-arrow.visible { opacity: 1; }
+    #dir-icon  { font-size: 28px; line-height: 1; }
+    #dir-label { font-size: 11px; color: rgba(255,255,255,0.8); font-weight: 600; }
+
     /* Compass unavailable toast */
     #compass-toast {
       position: fixed; bottom: 168px; left: 50%; transform: translateX(-50%);
@@ -435,6 +450,12 @@
 <!-- ── AR HTML Overlay (compass callouts) ── -->
 <div id="ar-overlay"></div>
 <div id="compass-toast">🧭 Tap screen to enable compass</div>
+
+<!-- ── Vision direction arrow ── -->
+<div id="direction-arrow" aria-live="polite">
+  <span id="dir-icon">↑</span>
+  <span id="dir-label"></span>
+</div>
 
 <!-- ── Front-facing distance indicator ── -->
 <div id="front-indicator" aria-hidden="true">
@@ -1643,6 +1664,104 @@ const Analytics = (() => {
 })();
 
 // ─────────────────────────────────────────────────────────
+//  Vision: capture camera frame → /api/analyze → direction arrow
+// ─────────────────────────────────────────────────────────
+const Vision = (() => {
+  const INTERVAL_MS  = 3000;   // capture every 3 s
+  const JPEG_QUALITY = 0.5;    // lower quality = smaller payload
+  const CAPTURE_W    = 320;    // resize before encoding (saves bandwidth)
+  const CAPTURE_H    = 240;
+
+  const DIR_MAP = {
+    straight: { icon: '↑', label: '直進' },
+    left:     { icon: '←', label: '左方向' },
+    right:    { icon: '→', label: '右方向' },
+    arrived:  { icon: '✅', label: '到着' }
+  };
+
+  let _timer   = null;
+  let _busy    = false;   // prevent overlapping requests
+  let _offscreen = null;  // OffscreenCanvas or regular Canvas for capture
+
+  function getSourceVideo() {
+    // AR.js injects a <video> element into the body
+    return document.querySelector('video');
+  }
+
+  function captureBase64() {
+    const video = getSourceVideo();
+    if (!video || video.readyState < video.HAVE_ENOUGH_DATA) return null;
+
+    if (!_offscreen) {
+      _offscreen = document.createElement('canvas');
+      _offscreen.width  = CAPTURE_W;
+      _offscreen.height = CAPTURE_H;
+    }
+    const ctx = _offscreen.getContext('2d');
+    ctx.drawImage(video, 0, 0, CAPTURE_W, CAPTURE_H);
+    // Remove the "data:image/jpeg;base64," prefix
+    return _offscreen.toDataURL('image/jpeg', JPEG_QUALITY).split(',')[1];
+  }
+
+  function showArrow(direction, description) {
+    const el = document.getElementById('direction-arrow');
+    const d  = DIR_MAP[direction] || DIR_MAP.straight;
+    document.getElementById('dir-icon').textContent  = d.icon;
+    document.getElementById('dir-label').textContent = description || d.label;
+    el.classList.add('visible');
+  }
+
+  function hideArrow() {
+    document.getElementById('direction-arrow').classList.remove('visible');
+  }
+
+  async function analyze() {
+    if (_busy) return;
+    _busy = true;
+    try {
+      const b64 = captureBase64();
+      if (!b64) return;
+
+      const r = await fetch('/api/analyze', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ image: b64 })
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+      const data = await r.json();
+      if (data.road_detected) {
+        showArrow(data.direction, data.description);
+      } else {
+        hideArrow();
+      }
+    } catch(e) {
+      console.warn('[Vision] analyze error:', e.message);
+      hideArrow();
+    } finally {
+      _busy = false;
+    }
+  }
+
+  function start() {
+    if (_timer) return;
+    // Initial delay: wait for camera to stabilise
+    setTimeout(() => {
+      analyze();
+      _timer = setInterval(analyze, INTERVAL_MS);
+    }, 2000);
+    console.log('[Vision] started — capturing every', INTERVAL_MS / 1000, 's');
+  }
+
+  function stop() {
+    clearInterval(_timer); _timer = null;
+    hideArrow();
+  }
+
+  return { start, stop };
+})();
+
+// ─────────────────────────────────────────────────────────
 //  Boot
 // ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -1655,6 +1774,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadSpots();
   refreshChips();
   initPermissionsAndAR();
+  Vision.start();
 
   // Compass init — iOS 13+ requires a user-gesture to grant DeviceOrientation permission
   if (typeof DeviceOrientationEvent !== 'undefined' &&
