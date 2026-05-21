@@ -1660,7 +1660,48 @@ const Analytics = (() => {
   }
 
   // Expose flush so hooks can call it directly if needed
-  return { init, onGPS, onBubbleTap, onChipTap, onModalOpen, onModalClose, flush };
+  return { init, onGPS, onBubbleTap, onChipTap, onModalOpen, onModalClose, flush,
+           SESSION_ID, SESSION_START };
+})();
+
+// ─────────────────────────────────────────────────────────
+//  GPS Tracker — records position every 10 s and sends to /tracks
+// ─────────────────────────────────────────────────────────
+const GpsTracker = (() => {
+  const INTERVAL_MS = 10000;
+  let _points = [];   // all recorded points this session
+  let _sent   = 0;    // index up to which has been successfully sent
+  let _timer  = null;
+
+  function record() {
+    if (!userPos) return;
+    _points.push({ lat: userPos.lat, lng: userPos.lng, t: new Date().toISOString() });
+  }
+
+  async function flush() {
+    const batch = _points.slice(_sent);
+    if (!batch.length) return;
+    try {
+      const r = await fetch('/tracks', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          sessionId: Analytics.SESSION_ID,
+          startTime: Analytics.SESSION_START,
+          points:    batch
+        })
+      });
+      if (r.ok) _sent = _points.length;
+    } catch(_) { /* keep unsent points for next flush */ }
+  }
+
+  function init() {
+    _timer = setInterval(() => { record(); flush(); }, INTERVAL_MS);
+    window.addEventListener('pagehide', () => { record(); flush(); });
+    console.log('[GpsTracker] recording every', INTERVAL_MS / 1000, 's');
+  }
+
+  return { init };
 })();
 
 // ─────────────────────────────────────────────────────────
@@ -1771,6 +1812,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('nearby-label').textContent = t('nearby');
 
   Analytics.init();
+  GpsTracker.init();
   await loadSpots();
   refreshChips();
   initPermissionsAndAR();

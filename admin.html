@@ -10,6 +10,8 @@
   <!-- Leaflet for coordinate picking -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet.heat for heatmap layer -->
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <!-- QR code generation (pure-browser, exposes window.qrcode) -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 
@@ -279,6 +281,17 @@
       font-size: 11px; color: var(--muted); text-align: center;
     }
 
+    /* ── Tracks map tab ── */
+    #tracks-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    #tracks-info { font-size: 12px; color: var(--muted); }
+    .tracks-mode-btn { border: 1px solid var(--border); background: transparent; color: var(--muted); }
+    .tracks-mode-btn.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+    #tracks-map {
+      height: calc(100vh - 210px); min-height: 320px;
+      border-radius: 14px; overflow: hidden;
+      border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
     /* ── Responsive ── */
     @media (max-width: 600px) {
       .form-grid { grid-template-columns: 1fr; }
@@ -303,6 +316,7 @@
   <div id="tab-nav">
     <button class="tab-nav-btn active" data-tab="spots"     onclick="showTab('spots')">⛩ スポット</button>
     <button class="tab-nav-btn"        data-tab="analytics" onclick="showTab('analytics')">📊 分析</button>
+    <button class="tab-nav-btn"        data-tab="tracks"    onclick="showTab('tracks')">🗺️ 軌跡</button>
   </div>
 
   <!-- ── Spots tab ── -->
@@ -386,6 +400,17 @@
         </table>
       </div>
     </div>
+  </div>
+
+  <!-- ── Tracks tab ── -->
+  <div id="tab-tracks" style="display:none">
+    <div id="tracks-controls">
+      <button class="btn btn-sm tracks-mode-btn active" id="btn-routes" onclick="setTracksMode('routes')">👤 個人ルート</button>
+      <button class="btn btn-sm tracks-mode-btn"        id="btn-heat"   onclick="setTracksMode('heat')">🔥 ヒートマップ</button>
+      <button class="btn btn-secondary btn-sm" onclick="loadTracks()">🔄 更新</button>
+      <span id="tracks-info"></span>
+    </div>
+    <div id="tracks-map"></div>
   </div>
 </main>
 
@@ -1188,7 +1213,94 @@ function showTab(tab) {
   );
   document.getElementById('tab-spots').style.display     = tab === 'spots'     ? '' : 'none';
   document.getElementById('tab-analytics').style.display = tab === 'analytics' ? '' : 'none';
+  document.getElementById('tab-tracks').style.display    = tab === 'tracks'    ? '' : 'none';
   if (tab === 'analytics') loadAnalytics();
+  if (tab === 'tracks')    { initTracksMap(); loadTracks(); }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Tracks map
+// ─────────────────────────────────────────────────────────
+let _tracksMap     = null;
+let _tracksData    = [];
+let _tracksMode    = 'routes';
+let _routeLayer    = null;
+let _heatLayer     = null;
+let _tracksMapReady = false;
+
+const ROUTE_COLORS = [
+  '#3b82f6','#10b981','#f59e0b','#8b5cf6',
+  '#ec4899','#06b6d4','#f97316','#84cc16',
+  '#ef4444','#a78bfa','#34d399','#fbbf24'
+];
+
+function initTracksMap() {
+  if (_tracksMapReady) { setTimeout(() => _tracksMap.invalidateSize(), 80); return; }
+  _tracksMapReady = true;
+  _tracksMap = L.map('tracks-map').setView([38.25, 140.43], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 18
+  }).addTo(_tracksMap);
+  setTimeout(() => _tracksMap.invalidateSize(), 100);
+}
+
+async function loadTracks() {
+  try {
+    const r = await fetch('/tracks');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    _tracksData = await r.json();
+    const totalPts = _tracksData.reduce((s, t) => s + (t.points || []).length, 0);
+    document.getElementById('tracks-info').textContent =
+      `${_tracksData.length}セッション・計${totalPts}点`;
+    renderTracks();
+  } catch(e) {
+    document.getElementById('tracks-info').textContent = '読み込み失敗: ' + e.message;
+  }
+}
+
+function setTracksMode(mode) {
+  _tracksMode = mode;
+  document.getElementById('btn-routes').classList.toggle('active', mode === 'routes');
+  document.getElementById('btn-heat').classList.toggle('active',   mode === 'heat');
+  renderTracks();
+}
+
+function renderTracks() {
+  if (!_tracksMap) return;
+  if (_routeLayer) { _tracksMap.removeLayer(_routeLayer); _routeLayer = null; }
+  if (_heatLayer)  { _tracksMap.removeLayer(_heatLayer);  _heatLayer  = null; }
+
+  const allPts = _tracksData.flatMap(t => (t.points || []).map(p => [p.lat, p.lng]));
+  if (!allPts.length) return;
+
+  if (_tracksMode === 'routes') {
+    _routeLayer = L.layerGroup();
+    _tracksData.forEach((session, i) => {
+      const pts = (session.points || []).map(p => [p.lat, p.lng]);
+      if (pts.length < 2) return;
+      const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
+      const start = new Date(session.startTime).toLocaleString('ja-JP');
+      L.polyline(pts, { color, weight: 3, opacity: 0.78 })
+        .bindPopup(`<b>${start}</b><br>${pts.length}ポイント`)
+        .addTo(_routeLayer);
+      // 出発点マーカー
+      L.circleMarker(pts[0], { radius: 6, fillColor: color, color: '#fff', weight: 2, fillOpacity: 1 })
+        .addTo(_routeLayer);
+    });
+    _routeLayer.addTo(_tracksMap);
+    _tracksMap.fitBounds(allPts, { padding: [24, 24] });
+
+  } else {
+    // ヒートマップ
+    if (typeof L.heatLayer !== 'function') {
+      document.getElementById('tracks-info').textContent += ' ※ leaflet.heat 未ロード';
+      return;
+    }
+    const heatData = allPts.map(([lat, lng]) => [lat, lng, 1]);
+    _heatLayer = L.heatLayer(heatData, { radius: 22, blur: 16, maxZoom: 18 });
+    _heatLayer.addTo(_tracksMap);
+    _tracksMap.fitBounds(allPts, { padding: [24, 24] });
+  }
 }
 
 // ─────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ PORT = int(os.environ.get('PORT', sys.argv[1] if len(sys.argv) > 1 else 8080))
 SPOTS_FILE      = 'spots.json'
 ROUTES_FILE     = 'routes.json'
 ANALYTICS_FILE  = 'analytics.json'
+TRACKS_FILE     = 'tracks.json'
 QR_DIR          = 'qr'
 COMPILED_DIR    = 'compiled'
 
@@ -38,10 +39,62 @@ class Handler(SimpleHTTPRequestHandler):
 
     # ── GET /analytics → return analytics.json ──────────────
     def do_GET(self):
-        if self.path.rstrip('/') == '/analytics':
+        path = self.path.rstrip('/')
+        if path == '/analytics':
             self._get_analytics()
+        elif path == '/tracks':
+            self._get_tracks()
         else:
             super().do_GET()
+
+    def _get_tracks(self):
+        try:
+            with open(TRACKS_FILE, 'r', encoding='utf-8') as f:
+                body = f.read().encode('utf-8')
+        except FileNotFoundError:
+            body = b'[]'
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _post_tracks(self):
+        try:
+            length  = int(self.headers.get('Content-Length', 0))
+            payload = json.loads(self.rfile.read(length))
+            sid     = payload.get('sessionId', '')
+            new_pts = payload.get('points', [])
+
+            try:
+                with open(TRACKS_FILE, 'r', encoding='utf-8') as f:
+                    tracks = json.load(f)
+                if not isinstance(tracks, list):
+                    tracks = []
+            except (FileNotFoundError, json.JSONDecodeError):
+                tracks = []
+
+            found = next((t for t in tracks if t.get('sessionId') == sid), None)
+            if found:
+                found['points'].extend(new_pts)
+            else:
+                tracks.append({
+                    'sessionId': sid,
+                    'startTime': payload.get('startTime', ''),
+                    'points':    new_pts
+                })
+
+            with open(TRACKS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(tracks, f, ensure_ascii=False, separators=(',', ':'))
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+        except Exception as e:
+            self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
 
     def _get_analytics(self):
         try:
@@ -144,6 +197,8 @@ class Handler(SimpleHTTPRequestHandler):
         path = self.path.rstrip('/')
         if path == '/analytics':
             self._post_analytics()
+        elif path == '/tracks':
+            self._post_tracks()
         elif path == '/api/analyze':
             self._post_analyze()
         elif path == '/' + ROUTES_FILE:
