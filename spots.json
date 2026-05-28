@@ -14,6 +14,16 @@
       "en": "Founded in 860 by Jikaku Daishi. Ancient cedars surround the main hall, creating a sacred atmosphere that has persisted for over a millennium. Ring the bell before entering.",
       "jp": "860年に慈覚大師によって開山されました。古い杉の木が本堂を囲み、千年以上続く神聖な雰囲気を醸し出しています。入堂前に鐘をつきましょう。",
       "zh": "860年由慈觉大师创立。古老的杉树环绕主殿，营造出千年以来持续的神圣氛围。进入前请敲钟。"
+    },
+    "address": {
+      "en": "",
+      "jp": "山形県山形市山寺4456-1",
+      "zh": ""
+    },
+    "hours": {
+      "open": "08:00",
+      "close": "17:00",
+      "closed_days": []
     }
   },
   {

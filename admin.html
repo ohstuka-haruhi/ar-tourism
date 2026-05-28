@@ -281,6 +281,28 @@
       font-size: 11px; color: var(--muted); text-align: center;
     }
 
+    /* ── Route ordering ── */
+    #route-toolbar {
+      display: none; align-items: center; gap: 10px; flex-wrap: wrap;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 10px 14px; margin-bottom: 14px;
+    }
+    #route-toolbar.show { display: flex; }
+    #route-stats { font-size: 12px; color: var(--muted); flex: 1; }
+    .route-order-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--accent-dark); color: #fff;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+    .drag-handle { cursor: grab; color: var(--muted); padding: 0 6px; font-size: 16px; }
+    .drag-handle:active { cursor: grabbing; }
+    .route-check { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent-dark); }
+    tr.drag-over-top    { box-shadow: 0 -2px 0 var(--accent); }
+    tr.drag-over-bottom { box-shadow: 0  2px 0 var(--accent); }
+    tr.dragging { opacity: 0.35; }
+    .route-col { width: 90px; text-align: center; }
+
     /* ── Tracks map tab ── */
     #tracks-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
     #tracks-info { font-size: 12px; color: var(--muted); }
@@ -291,6 +313,29 @@
       border-radius: 14px; overflow: hidden;
       border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
+
+    /* ── Hours / Address fields ── */
+    .hours-row { display: flex; align-items: center; gap: 8px; }
+    .hours-row input[type="time"] {
+      flex: 1; padding: 7px 10px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 14px; color: var(--text);
+      background: var(--card);
+    }
+    .hours-row span { color: var(--muted); font-size: 14px; flex-shrink: 0; }
+    .closed-days {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;
+      align-items: center;
+    }
+    .closed-days > span { font-size: 12px; color: var(--muted); margin-right: 4px; }
+    .day-label {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 12px; color: var(--text); cursor: pointer;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 4px 9px; transition: background 0.12s;
+      user-select: none;
+    }
+    .day-label input { display: none; }
+    .day-label.checked { background: rgba(229,57,53,0.1); color: var(--danger); border-color: rgba(229,57,53,0.3); font-weight: 600; }
 
     /* ── Responsive ── */
     @media (max-width: 600px) {
@@ -326,12 +371,23 @@
         <h2>Spots</h2>
         <span class="badge" id="spot-count">0</span>
       </div>
-      <button class="btn btn-primary" onclick="openAddForm()">＋ Add Spot</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="toggleRouteMode()" id="route-mode-btn">🗺️ 順路設定</button>
+        <button class="btn btn-primary" onclick="openAddForm()">＋ Add Spot</button>
+      </div>
+    </div>
+    <!-- Route toolbar (visible in route mode) -->
+    <div id="route-toolbar">
+      <span>🗺️ 順路設定モード</span>
+      <span id="route-stats">—</span>
+      <button class="btn btn-success btn-sm" onclick="saveRoute()">💾 順路を保存</button>
+      <button class="btn btn-secondary btn-sm" onclick="toggleRouteMode()">✕ 終了</button>
     </div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
+            <th class="route-col" id="route-col-head" style="display:none">順路</th>
             <th>名前</th>
             <th>Category</th>
             <th>Coordinates</th>
@@ -341,7 +397,7 @@
           </tr>
         </thead>
         <tbody id="spots-tbody">
-          <tr class="empty-row"><td colspan="6">No spots yet. Click "Add Spot" to create one.</td></tr>
+          <tr class="empty-row"><td colspan="7">No spots yet. Click "Add Spot" to create one.</td></tr>
         </tbody>
       </table>
     </div>
@@ -480,6 +536,39 @@
           <div class="desc-tab active" id="dtab-jp"><textarea id="f-desc-jp" placeholder="日本語説明"></textarea></div>
           <div class="desc-tab" id="dtab-zh"><textarea id="f-desc-zh" placeholder="中文描述"></textarea></div>
         </div>
+
+        <!-- Address -->
+        <div class="field full">
+          <label>住所 Address</label>
+          <div class="tab-bar">
+            <button type="button" class="tab-btn" data-atab="en" onclick="switchAddrTab('en')">EN</button>
+            <button type="button" class="tab-btn active" data-atab="jp" onclick="switchAddrTab('jp')">JP</button>
+            <button type="button" class="tab-btn" data-atab="zh" onclick="switchAddrTab('zh')">ZH</button>
+          </div>
+          <div class="desc-tab" id="atab-en"><input id="f-addr-en" placeholder="English address"></div>
+          <div class="desc-tab active" id="atab-jp"><input id="f-addr-jp" placeholder="日本語住所（例：山形県山形市山寺4456-1）"></div>
+          <div class="desc-tab" id="atab-zh"><input id="f-addr-zh" placeholder="中文地址"></div>
+        </div>
+
+        <!-- Hours -->
+        <div class="field full">
+          <label>営業時間 Hours</label>
+          <div class="hours-row">
+            <input type="time" id="f-hours-open" value="09:00">
+            <span>〜</span>
+            <input type="time" id="f-hours-close" value="17:00">
+          </div>
+          <div class="closed-days" id="closed-days-row">
+            <span>定休日:</span>
+            <label class="day-label"><input type="checkbox" class="f-closed-day" value="mon">月</label>
+            <label class="day-label"><input type="checkbox" class="f-closed-day" value="tue">火</label>
+            <label class="day-label"><input type="checkbox" class="f-closed-day" value="wed">水</label>
+            <label class="day-label"><input type="checkbox" class="f-closed-day" value="thu">木</label>
+            <label class="day-label"><input type="checkbox" class="f-closed-day" value="fri">金</label>
+            <label class="day-label"><input type="checkbox" class="f-closed-day" value="sat">土</label>
+            <label class="day-label"><input type="checkbox" class="f-closed-day" value="sun">日</label>
+          </div>
+        </div>
       </div>
 
       <div class="form-footer">
@@ -584,21 +673,42 @@ function genId() {
 // ─────────────────────────────────────────────────────────
 const CAT_COLORS = { heritage:'heritage', nature:'nature', facility:'facility', shop:'shop' };
 
+const ROUTE_NUMS = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
+let routeMode = false;
+
 function renderTable() {
   document.getElementById('spot-count').textContent = spots.length;
   const tbody = document.getElementById('spots-tbody');
 
+  // Build route order map (inRoute spots sorted by routeOrder)
+  const routeOrdered = spots
+    .filter(s => s.inRoute)
+    .sort((a, b) => (a.routeOrder || 999) - (b.routeOrder || 999));
+  const routeIdxMap = {};
+  routeOrdered.forEach((s, i) => { routeIdxMap[s.id] = i; });
+
   if (spots.length === 0) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No spots yet. Click "Add Spot" to create one.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No spots yet. Click "Add Spot" to create one.</td></tr>';
     return;
   }
 
   tbody.innerHTML = spots.map(s => {
-    const name = s.name.jp || s.name.en || Object.values(s.name)[0] || '';
-    const desc = (s.description.jp || s.description.en || Object.values(s.description)[0] || '').slice(0, 80);
-    const cat  = s.category || 'gate';
+    const name    = s.name.jp || s.name.en || Object.values(s.name)[0] || '';
+    const desc    = (s.description.jp || s.description.en || Object.values(s.description)[0] || '').slice(0, 80);
+    const cat     = s.category || 'gate';
+    const inRoute = !!s.inRoute;
+    const rIdx    = routeIdxMap[s.id];
+    const badge   = (rIdx !== undefined)
+      ? `<span class="route-order-badge">${ROUTE_NUMS[rIdx] || rIdx + 1}</span>`
+      : '';
+
     return `
-    <tr>
+    <tr data-id="${s.id}" draggable="${routeMode}">
+      <td class="route-col" style="display:${routeMode ? '' : 'none'}">
+        <span class="drag-handle">☰</span>
+        <input type="checkbox" class="route-check" data-id="${s.id}" ${inRoute ? 'checked' : ''}>
+        ${badge}
+      </td>
       <td class="name-cell"><span class="ellipsis" style="max-width:160px">${esc(name)}</span></td>
       <td><span class="cat-badge ${CAT_COLORS[cat] || ''}">${esc(cat)}</span></td>
       <td class="coord">${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}</td>
@@ -606,13 +716,106 @@ function renderTable() {
       <td class="desc-cell"><span class="ellipsis">${esc(desc)}${desc.length >= 80 ? '…' : ''}</span></td>
       <td class="actions-cell">
         <button class="btn btn-secondary btn-sm" onclick="openEditForm('${s.id}')">Edit</button>
-        <button class="btn btn-sm ${s.hasQR ? 'btn-primary' : 'btn-secondary'}" onclick="openQRModal('${s.id}')" title="${s.hasQR ? 'QR generated — click to view/reprint' : 'Generate AR QR code'}">
+        <button class="btn btn-sm ${s.hasQR ? 'btn-primary' : 'btn-secondary'}" onclick="openQRModal('${s.id}')" title="${s.hasQR ? 'QR generated' : 'Generate QR'}">
           📱 ${s.hasQR ? 'QR ✓' : 'QR'}
         </button>
         <button class="btn btn-danger btn-sm" onclick="askDelete('${s.id}')">Delete</button>
       </td>
     </tr>`;
   }).join('');
+
+  updateRouteStats();
+}
+
+function updateRouteStats() {
+  const n = spots.filter(s => s.inRoute).length;
+  document.getElementById('route-stats').textContent =
+    n > 0 ? `順路スポット ${n}件 設定済み` : 'スポットにチェックを入れて順路を作成';
+}
+
+function toggleRouteMode() {
+  routeMode = !routeMode;
+  document.getElementById('route-toolbar').classList.toggle('show', routeMode);
+  document.getElementById('route-col-head').style.display = routeMode ? '' : 'none';
+  document.getElementById('route-mode-btn').textContent = routeMode ? '✕ 設定終了' : '🗺️ 順路設定';
+  renderTable();
+}
+
+async function saveRoute() {
+  // Assign routeOrder based on current array order among inRoute spots
+  let order = 1;
+  spots.forEach(s => {
+    if (s.inRoute) { s.routeOrder = order++; }
+    else           { delete s.routeOrder; }
+  });
+  const btn = document.querySelector('#route-toolbar .btn-success');
+  btn.disabled = true; btn.textContent = '保存中…';
+  try {
+    await saveSpots();
+    showToast('順路を保存しました ✓');
+    renderTable();
+  } catch(e) {
+    showToast('保存失敗: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 順路を保存';
+  }
+}
+
+// ── Drag & Drop (event delegation on tbody) ────────────
+function initRouteEvents() {
+  const tbody = document.getElementById('spots-tbody');
+  let dragSrcId = null;
+
+  tbody.addEventListener('dragstart', e => {
+    const tr = e.target.closest('tr[data-id]');
+    if (!tr || !routeMode) return;
+    dragSrcId = tr.dataset.id;
+    tr.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  tbody.addEventListener('dragend', e => {
+    tbody.querySelectorAll('tr').forEach(r =>
+      r.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom'));
+  });
+
+  tbody.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const tr = e.target.closest('tr[data-id]');
+    tbody.querySelectorAll('tr').forEach(r =>
+      r.classList.remove('drag-over-top', 'drag-over-bottom'));
+    if (tr && tr.dataset.id !== dragSrcId) {
+      const mid = tr.getBoundingClientRect().top + tr.getBoundingClientRect().height / 2;
+      tr.classList.add(e.clientY < mid ? 'drag-over-top' : 'drag-over-bottom');
+    }
+  });
+
+  tbody.addEventListener('drop', e => {
+    e.preventDefault();
+    const tr = e.target.closest('tr[data-id]');
+    if (!tr || !dragSrcId || tr.dataset.id === dragSrcId) return;
+
+    const srcIdx  = spots.findIndex(s => s.id === dragSrcId);
+    const tgtIdx  = spots.findIndex(s => s.id === tr.dataset.id);
+    if (srcIdx < 0 || tgtIdx < 0) return;
+
+    const mid     = tr.getBoundingClientRect().top + tr.getBoundingClientRect().height / 2;
+    const insertBefore = e.clientY < mid;
+    const [moved] = spots.splice(srcIdx, 1);
+    const newIdx  = spots.findIndex(s => s.id === tr.dataset.id);
+    spots.splice(insertBefore ? newIdx : newIdx + 1, 0, moved);
+    renderTable();
+  });
+
+  // Checkbox toggle via delegation
+  tbody.addEventListener('change', e => {
+    if (!e.target.classList.contains('route-check')) return;
+    const id = e.target.dataset.id;
+    const s  = spots.find(x => x.id === id);
+    if (s) s.inRoute = e.target.checked;
+    renderTable();
+  });
 }
 
 function esc(s) {
@@ -672,8 +875,12 @@ function openAddForm() {
   document.getElementById('spot-form').reset();
   document.getElementById('f-id').value = '';
   document.getElementById('f-radius').value = '50';
+  document.getElementById('f-hours-open').value  = '09:00';
+  document.getElementById('f-hours-close').value = '17:00';
+  setClosedDays([]);
   switchDescTab('jp');
   switchNameTab('jp');
+  switchAddrTab('jp');
   document.getElementById('form-modal').classList.add('open');
   // Init map after modal is visible
   requestAnimationFrame(() => {
@@ -702,8 +909,15 @@ function openEditForm(id) {
   document.getElementById('f-desc-en').value  = spot.description.en || '';
   document.getElementById('f-desc-jp').value  = spot.description.jp || '';
   document.getElementById('f-desc-zh').value  = spot.description.zh || '';
+  document.getElementById('f-addr-en').value  = (spot.address || {}).en || '';
+  document.getElementById('f-addr-jp').value  = (spot.address || {}).jp || '';
+  document.getElementById('f-addr-zh').value  = (spot.address || {}).zh || '';
+  document.getElementById('f-hours-open').value  = (spot.hours || {}).open  || '09:00';
+  document.getElementById('f-hours-close').value = (spot.hours || {}).close || '17:00';
+  setClosedDays((spot.hours || {}).closed_days || []);
   switchDescTab('jp');
   switchNameTab('jp');
+  switchAddrTab('jp');
   document.getElementById('form-modal').classList.add('open');
   requestAnimationFrame(() => {
     initMap();
@@ -738,6 +952,25 @@ function switchNameTab(lang) {
   document.querySelector(`[data-ntab="${lang}"]`).classList.add('active');
 }
 
+function switchAddrTab(lang) {
+  document.querySelectorAll('.desc-tab[id^="atab-"]').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('[data-atab]').forEach(b  => b.classList.remove('active'));
+  document.getElementById(`atab-${lang}`).classList.add('active');
+  document.querySelector(`[data-atab="${lang}"]`).classList.add('active');
+}
+
+function setClosedDays(days) {
+  document.querySelectorAll('.f-closed-day').forEach(cb => {
+    const checked = days.includes(cb.value);
+    cb.checked = checked;
+    cb.closest('.day-label').classList.toggle('checked', checked);
+  });
+}
+
+function getClosedDays() {
+  return [...document.querySelectorAll('.f-closed-day:checked')].map(cb => cb.value);
+}
+
 // ─────────────────────────────────────────────────────────
 //  Form submit
 // ─────────────────────────────────────────────────────────
@@ -754,6 +987,13 @@ async function handleFormSubmit(e) {
   const nameEn = document.getElementById('f-name-en').value.trim();
   if (!nameEn) { showToast('English name is required'); return; }
 
+  const addrJp = document.getElementById('f-addr-jp').value.trim();
+  const addrEn = document.getElementById('f-addr-en').value.trim();
+  const addrZh = document.getElementById('f-addr-zh').value.trim();
+  const hoursOpen  = document.getElementById('f-hours-open').value;
+  const hoursClose = document.getElementById('f-hours-close').value;
+  const closedDays = getClosedDays();
+
   const spot = {
     id:       document.getElementById('f-id').value || genId(),
     category: document.getElementById('f-category').value,
@@ -768,13 +1008,25 @@ async function handleFormSubmit(e) {
       en: document.getElementById('f-desc-en').value.trim(),
       jp: document.getElementById('f-desc-jp').value.trim() || document.getElementById('f-desc-en').value.trim(),
       zh: document.getElementById('f-desc-zh').value.trim() || document.getElementById('f-desc-en').value.trim()
-    }
+    },
+    address: { en: addrEn, jp: addrJp, zh: addrZh },
+    hours:   { open: hoursOpen, close: hoursClose, closed_days: closedDays }
   };
 
   const existing = spots.findIndex(s => s.id === spot.id);
   const isNew    = existing < 0;
-  if (isNew) spots.push(spot);
-  else        spots[existing] = spot;
+  if (isNew) {
+    spots.push(spot);
+  } else {
+    // Preserve flags that the form doesn't edit
+    const prev = spots[existing];
+    if (prev.inRoute    !== undefined) spot.inRoute    = prev.inRoute;
+    if (prev.routeOrder !== undefined) spot.routeOrder = prev.routeOrder;
+    if (prev.hasQR      !== undefined) spot.hasQR      = prev.hasQR;
+    if (prev.hasAR      !== undefined) spot.hasAR      = prev.hasAR;
+    if (prev.arUrl      !== undefined) spot.arUrl      = prev.arUrl;
+    spots[existing] = spot;
+  }
 
   const saveBtn = document.getElementById('save-btn');
   saveBtn.disabled    = true;
@@ -1418,8 +1670,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   switchDescTab('jp');
   switchNameTab('jp');
 
+  // Day-label toggle styling
+  document.getElementById('closed-days-row').addEventListener('change', e => {
+    if (e.target.classList.contains('f-closed-day')) {
+      e.target.closest('.day-label').classList.toggle('checked', e.target.checked);
+    }
+  });
+
   await loadSpots();
   renderTable();
+  initRouteEvents();
 });
 </script>
 </body>

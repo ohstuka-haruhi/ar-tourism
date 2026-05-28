@@ -107,6 +107,32 @@
     .chip-dot  { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
     .chip-dist { color: var(--accent-dark); font-size: 11px; }
 
+    /* ── Route nav button / progress bar ── */
+    #route-nav-btn {
+      display: none;
+      width: 100%; margin-bottom: 10px;
+      padding: 10px 16px; border: none; border-radius: 10px;
+      background: var(--accent-dark); color: #fff;
+      font-size: 14px; font-weight: 700; cursor: pointer;
+      align-items: center; justify-content: center; gap: 6px;
+      letter-spacing: 0.02em;
+    }
+    #route-nav-bar {
+      display: none;
+      align-items: center; justify-content: space-between;
+      margin-bottom: 10px;
+      background: var(--accent-dark); color: #fff;
+      border-radius: 10px; padding: 8px 12px;
+      font-size: 13px; font-weight: 600; gap: 8px;
+    }
+    #route-nav-label { flex: 1; }
+    #route-nav-bar button {
+      background: rgba(255,255,255,0.22); border: none;
+      color: #fff; border-radius: 50%; width: 22px; height: 22px;
+      cursor: pointer; font-size: 11px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+
     /* ── Modal ── */
     #modal {
       display: none; position: fixed; inset: 0; z-index: 20;
@@ -133,7 +159,21 @@
     }
     #modal-cat  { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent-dark); margin-bottom: 4px; }
     #modal-name { font-size: 22px; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; }
-    #modal-dist { font-size: 13px; color: #666; margin-bottom: 16px; }
+    #modal-dist { font-size: 13px; color: #666; margin-bottom: 8px; }
+    #modal-hours-bar {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 6px; flex-wrap: wrap;
+    }
+    .hours-badge {
+      font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 10px;
+    }
+    .hours-badge.open   { background: rgba(16,185,129,0.15); color: #065f46; }
+    .hours-badge.closed { background: rgba(220,38,38,0.12);  color: #991b1b; }
+    .hours-time { font-size: 12px; color: #555; }
+    #modal-address {
+      font-size: 12px; color: #888; margin-bottom: 12px;
+      display: flex; align-items: flex-start; gap: 4px; line-height: 1.5;
+    }
     #modal-desc { font-size: 15px; color: #333; line-height: 1.65; }
     #modal-map  {
       height: 200px; border-radius: 12px; overflow: hidden;
@@ -480,6 +520,11 @@
   <div id="gps-badge">GPS: locating…</div>
   <div id="spacer"></div>
   <div id="bottom-panel">
+    <div id="route-nav-bar">
+      <span id="route-nav-label"></span>
+      <button onclick="cancelNavigation()" aria-label="順路ナビ終了">✕</button>
+    </div>
+    <button id="route-nav-btn" onclick="startRouteNav()">▶ 順路ナビ開始</button>
     <div id="nearby-label">Nearby</div>
     <div id="spots-chips"></div>
   </div>
@@ -492,6 +537,8 @@
     <div id="modal-cat"></div>
     <h2 id="modal-name"></h2>
     <p id="modal-dist"></p>
+    <div id="modal-hours-bar" style="display:none"></div>
+    <p id="modal-address" style="display:none"></p>
     <p id="modal-desc"></p>
     <div id="modal-map"></div>
     <button id="nav-btn" onclick="triggerNavigation()">🧭 このスポットに向かう</button>
@@ -690,13 +737,17 @@ function refreshChips() {
   }
 
   ranked.forEach(({ s, dist }) => {
-    const chip  = document.createElement('div');
-    const color = catColor(s.category);
+    const chip      = document.createElement('div');
+    const color     = catColor(s.category);
+    const openState = isOpen(s);
+    const dotColor  = openState === true  ? '#10b981'
+                    : openState === false ? '#ef4444'
+                    : color;
     chip.className = 'spot-chip';
     chip.style.borderColor = `${color}66`;
     chip.innerHTML = `
       <span class="chip-name">
-        <span class="chip-dot" style="background:${color}"></span>${s.name[lang] || s.name.en}
+        <span class="chip-dot" style="background:${dotColor}"></span>${s.name[lang] || s.name.en}
       </span>
       <span class="chip-dist" style="color:${color}">${dist !== null ? Math.round(dist) + 'm' : '—'}</span>
     `;
@@ -708,10 +759,13 @@ function refreshChips() {
 // ─────────────────────────────────────────────────────────
 //  Modal
 // ─────────────────────────────────────────────────────────
-let selectedSpotId = null;   // 選択中スポット（距離制限なしで方向案内）
-let isNavigating   = false;  // ナビゲーション中フラグ
-let navSpot        = null;   // ナビ対象スポット
-let _modalMap      = null;   // Leaflet インスタンス（再利用防止で毎回再生成）
+let selectedSpotId   = null;
+let isNavigating     = false;
+let navSpot          = null;
+let _modalMap        = null;
+let isRouteNavActive = false;
+let routeSpots       = [];
+let routeIdx         = 0;
 
 function openModal(spot, dist) {
   Analytics.onModalOpen(spot.id);
@@ -724,6 +778,34 @@ function openModal(spot, dist) {
     dist != null ? `${Math.round(dist)}m ${t('away')}` : '';
   document.getElementById('modal-desc').textContent =
     spot.description[lang] || spot.description.en || '';
+
+  // 営業時間バー
+  const hoursBar  = document.getElementById('modal-hours-bar');
+  const openState = isOpen(spot);
+  if (openState !== null && spot.hours) {
+    const badgeClass = openState ? 'open' : 'closed';
+    const badgeText  = openState
+      ? (lang === 'en' ? 'Open' : lang === 'zh' ? '营业中' : '営業中')
+      : (lang === 'en' ? 'Closed' : lang === 'zh' ? '已打烊' : '営業時間外');
+    const timeText = `${spot.hours.open}〜${spot.hours.close}`;
+    hoursBar.innerHTML =
+      `<span class="hours-badge ${badgeClass}">${badgeText}</span>` +
+      `<span class="hours-time">${timeText}</span>`;
+    hoursBar.style.display = 'flex';
+  } else {
+    hoursBar.style.display = 'none';
+  }
+
+  // 住所
+  const addrEl = document.getElementById('modal-address');
+  const addr   = (spot.address || {})[lang] || (spot.address || {}).jp || (spot.address || {}).en || '';
+  if (addr) {
+    addrEl.textContent = '📍 ' + addr;
+    addrEl.style.display = 'flex';
+  } else {
+    addrEl.style.display = 'none';
+  }
+
   document.getElementById('modal').classList.add('open');
 
   // ナビボタンのカテゴリカラーを設定して表示
@@ -850,14 +932,98 @@ function triggerNavigation() {
 }
 
 function cancelNavigation() {
-  isNavigating   = false;
-  navSpot        = null;
-  selectedSpotId = null;
+  isRouteNavActive = false;
+  routeSpots       = [];
+  routeIdx         = 0;
+  isNavigating     = false;
+  navSpot          = null;
+  selectedSpotId   = null;
   if (_miniMap) { _miniMap.remove(); _miniMap = null; }
   _miniMapPosMarker = null;
   document.getElementById('nav-minimap-wrap').classList.remove('show');
   document.getElementById('nav-minimap-arrive').classList.remove('show');
+  updateRouteProgress();
   scheduleOverlay();
+}
+
+const ROUTE_NUMS = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
+
+function updateRouteProgress() {
+  const bar = document.getElementById('route-nav-bar');
+  const btn = document.getElementById('route-nav-btn');
+  if (!bar || !btn) return;
+  if (isRouteNavActive && routeSpots.length > 0) {
+    bar.style.display = 'flex';
+    btn.style.display = 'none';
+    const spot = routeSpots[routeIdx];
+    const num  = ROUTE_NUMS[routeIdx] || `${routeIdx + 1}`;
+    document.getElementById('route-nav-label').textContent =
+      `${num} / ${routeSpots.length}　${spot.name[lang] || spot.name.jp || spot.name.en}`;
+  } else {
+    bar.style.display = 'none';
+    btn.style.display = spots.some(s => s.inRoute) ? 'flex' : 'none';
+  }
+}
+
+function startRouteNav() {
+  routeSpots = spots.filter(s => s.inRoute)
+    .sort((a, b) => (a.routeOrder || 999) - (b.routeOrder || 999));
+  if (!routeSpots.length) return;
+
+  // Start from nearest inRoute spot
+  routeIdx = 0;
+  if (userPos) {
+    let minDist = Infinity;
+    routeSpots.forEach((s, i) => {
+      const d = haversine(userPos.lat, userPos.lng, s.lat, s.lng);
+      if (d < minDist) { minDist = d; routeIdx = i; }
+    });
+  }
+
+  isRouteNavActive = true;
+  const spot = routeSpots[routeIdx];
+  isNavigating   = true;
+  navSpot        = spot;
+  selectedSpotId = spot.id;
+  initMiniMap(spot);
+  updateRouteProgress();
+  scheduleOverlay();
+}
+
+function advanceRoute() {
+  routeIdx++;
+  document.getElementById('nav-minimap-arrive').classList.remove('show');
+  if (routeIdx >= routeSpots.length) {
+    const n = routeSpots.length;
+    isRouteNavActive = false;
+    cancelNavigation();
+    setTimeout(() => {
+      const t = document.getElementById('compass-toast');
+      t.style.color = '#1a6e2e';
+      t.style.borderColor = 'rgba(0,150,50,0.4)';
+      t.textContent = `🎉 順路完了！${n}スポット巡りました`;
+      t.classList.add('show');
+      setTimeout(() => {
+        t.classList.remove('show');
+        t.style.color = '';
+        t.style.borderColor = '';
+        t.textContent = '🧭 Tap screen to enable compass';
+      }, 3000);
+    }, 200);
+    return;
+  }
+  const spot = routeSpots[routeIdx];
+  navSpot        = spot;
+  selectedSpotId = spot.id;
+  initMiniMap(spot);
+  updateRouteProgress();
+  scheduleOverlay();
+}
+
+function updateRouteNav() {
+  if (!isRouteNavActive || !navSpot || !userPos) return;
+  const dist = haversine(userPos.lat, userPos.lng, navSpot.lat, navSpot.lng);
+  if (dist <= 50) advanceRoute();
 }
 
 function initMiniMap(spot) {
@@ -1080,6 +1246,7 @@ function startGPS() {
       badge.className   = 'ok';
       Analytics.onGPS(pos);
       updateMiniMapPos();
+      updateRouteNav();
       refreshChips();
       scheduleOverlay();
       if (document.getElementById('fallback').classList.contains('show')) refreshFallbackList();
@@ -1145,6 +1312,20 @@ const CAT_BG = {
 };
 function catColor(cat) { return CAT_COLOR[cat] || CAT_COLOR.default; }
 function catBg(cat)    { return CAT_BG[cat]    || CAT_BG.default;    }
+
+// Returns true=open, false=closed, null=no hours set
+function isOpen(spot) {
+  const h = spot.hours;
+  if (!h || !h.open || !h.close) return null;
+  const now  = new Date();
+  const days = ['sun','mon','tue','wed','thu','fri','sat'];
+  const day  = days[now.getDay()];
+  if (Array.isArray(h.closed_days) && h.closed_days.includes(day)) return false;
+  const cur   = now.getHours() * 60 + now.getMinutes();
+  const [oh, om] = h.open.split(':').map(Number);
+  const [ch, cm] = h.close.split(':').map(Number);
+  return cur >= oh * 60 + om && cur < ch * 60 + cm;
+}
 
 // Normalize angle to -180..+180
 function normAngle(a) { return ((a % 360) + 540) % 360 - 180; }
@@ -1815,6 +1996,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   GpsTracker.init();
   await loadSpots();
   refreshChips();
+  updateRouteProgress();
   initPermissionsAndAR();
   Vision.start();
 
