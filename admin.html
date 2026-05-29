@@ -314,6 +314,17 @@
       border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
 
+    /* ── Lang tab select ── */
+    .lang-tab-select {
+      padding: 5px 22px 5px 9px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 12px; font-weight: 600;
+      background: var(--card); color: var(--text); cursor: pointer;
+      margin-bottom: 8px;
+      -webkit-appearance: none; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23666'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 7px center;
+    }
+
     /* ── Hours / Address fields ── */
     .hours-row { display: flex; align-items: center; gap: 8px; }
     .hours-row input[type="time"] {
@@ -485,14 +496,8 @@
         <!-- Name per language -->
         <div class="field full">
           <label>Name</label>
-          <div class="tab-bar">
-            <button type="button" class="tab-btn" data-ntab="en" onclick="switchNameTab('en')">EN</button>
-            <button type="button" class="tab-btn active" data-ntab="jp" onclick="switchNameTab('jp')">JP</button>
-            <button type="button" class="tab-btn" data-ntab="zh" onclick="switchNameTab('zh')">ZH</button>
-          </div>
-          <div class="desc-tab" id="ntab-en"><input id="f-name-en" placeholder="English name" required></div>
-          <div class="desc-tab active" id="ntab-jp"><input id="f-name-jp" placeholder="日本語名称"></div>
-          <div class="desc-tab" id="ntab-zh"><input id="f-name-zh" placeholder="中文名称"></div>
+          <select class="lang-tab-select" id="name-lang-sel" onchange="switchNameTab(this.value)"></select>
+          <div id="name-lang-fields"></div>
         </div>
 
         <!-- Category & Radius -->
@@ -527,27 +532,15 @@
         <!-- Descriptions -->
         <div class="field full">
           <label>Description</label>
-          <div class="tab-bar">
-            <button type="button" class="tab-btn" data-dtab="en" onclick="switchDescTab('en')">EN</button>
-            <button type="button" class="tab-btn active" data-dtab="jp" onclick="switchDescTab('jp')">JP</button>
-            <button type="button" class="tab-btn" data-dtab="zh" onclick="switchDescTab('zh')">ZH</button>
-          </div>
-          <div class="desc-tab" id="dtab-en"><textarea id="f-desc-en" placeholder="English description" required></textarea></div>
-          <div class="desc-tab active" id="dtab-jp"><textarea id="f-desc-jp" placeholder="日本語説明"></textarea></div>
-          <div class="desc-tab" id="dtab-zh"><textarea id="f-desc-zh" placeholder="中文描述"></textarea></div>
+          <select class="lang-tab-select" id="desc-lang-sel" onchange="switchDescTab(this.value)"></select>
+          <div id="desc-lang-fields"></div>
         </div>
 
         <!-- Address -->
         <div class="field full">
           <label>住所 Address</label>
-          <div class="tab-bar">
-            <button type="button" class="tab-btn" data-atab="en" onclick="switchAddrTab('en')">EN</button>
-            <button type="button" class="tab-btn active" data-atab="jp" onclick="switchAddrTab('jp')">JP</button>
-            <button type="button" class="tab-btn" data-atab="zh" onclick="switchAddrTab('zh')">ZH</button>
-          </div>
-          <div class="desc-tab" id="atab-en"><input id="f-addr-en" placeholder="English address"></div>
-          <div class="desc-tab active" id="atab-jp"><input id="f-addr-jp" placeholder="日本語住所（例：山形県山形市山寺4456-1）"></div>
-          <div class="desc-tab" id="atab-zh"><input id="f-addr-zh" placeholder="中文地址"></div>
+          <select class="lang-tab-select" id="addr-lang-sel" onchange="switchAddrTab(this.value)"></select>
+          <div id="addr-lang-fields"></div>
         </div>
 
         <!-- Hours -->
@@ -635,6 +628,56 @@
 
 <script>
 'use strict';
+
+// ─────────────────────────────────────────────────────────
+//  Supported languages
+// ─────────────────────────────────────────────────────────
+const LANGS = [
+  { code: 'jp', label: '日本語' },
+  { code: 'en', label: 'English' },
+  { code: 'zh', label: '中文' },
+  { code: 'hi', label: 'हिंदी' },
+  { code: 'es', label: 'Español' },
+  { code: 'fr', label: 'Français' },
+  { code: 'ar', label: 'العربية' },
+  { code: 'bn', label: 'বাংলা' },
+  { code: 'pt', label: 'Português' },
+  { code: 'ru', label: 'Русский' },
+  { code: 'ur', label: 'اردو' },
+  { code: 'id', label: 'Indonesia' },
+  { code: 'de', label: 'Deutsch' },
+  { code: 'ko', label: '한국어' },
+  { code: 'ms', label: 'Melayu' },
+];
+
+// Build all language input panels for the spot edit form
+function buildFormLangFields() {
+  const defs = [
+    { selId: 'name-lang-sel', containerId: 'name-lang-fields', prefix: 'ntab', inputId: 'f-name', tag: 'input' },
+    { selId: 'desc-lang-sel', containerId: 'desc-lang-fields', prefix: 'dtab', inputId: 'f-desc', tag: 'textarea' },
+    { selId: 'addr-lang-sel', containerId: 'addr-lang-fields', prefix: 'atab', inputId: 'f-addr', tag: 'input' },
+  ];
+  defs.forEach(({ selId, containerId, prefix, inputId, tag }) => {
+    const sel       = document.getElementById(selId);
+    const container = document.getElementById(containerId);
+    if (!sel || !container) return;
+    LANGS.forEach((l, i) => {
+      const opt = document.createElement('option');
+      opt.value = l.code; opt.textContent = l.label;
+      sel.appendChild(opt);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'desc-tab' + (i === 0 ? ' active' : '');
+      wrap.id = `${prefix}-${l.code}`;
+
+      const el = document.createElement(tag);
+      el.id = `${inputId}-${l.code}`;
+      if (tag === 'textarea') { el.rows = 3; el.style.resize = 'vertical'; }
+      wrap.appendChild(el);
+      container.appendChild(wrap);
+    });
+  });
+}
 
 // ─────────────────────────────────────────────────────────
 //  Data management  (server-side spots.json via PUT)
@@ -878,8 +921,14 @@ function openAddForm() {
   document.getElementById('f-hours-open').value  = '09:00';
   document.getElementById('f-hours-close').value = '17:00';
   setClosedDays([]);
-  switchDescTab('jp');
+  LANGS.forEach(l => {
+    ['f-name-', 'f-desc-', 'f-addr-'].forEach(p => {
+      const el = document.getElementById(p + l.code);
+      if (el) el.value = '';
+    });
+  });
   switchNameTab('jp');
+  switchDescTab('jp');
   switchAddrTab('jp');
   document.getElementById('form-modal').classList.add('open');
   // Init map after modal is visible
@@ -899,24 +948,23 @@ function openEditForm(id) {
   document.getElementById('form-title').textContent = 'Edit Spot';
   document.getElementById('save-btn').textContent   = 'Update Spot';
   document.getElementById('f-id').value       = spot.id;
-  document.getElementById('f-name-en').value  = spot.name.en || '';
-  document.getElementById('f-name-jp').value  = spot.name.jp || '';
-  document.getElementById('f-name-zh').value  = spot.name.zh || '';
+  LANGS.forEach(l => {
+    const nEl = document.getElementById(`f-name-${l.code}`);
+    if (nEl) nEl.value = (spot.name || {})[l.code] || '';
+    const dEl = document.getElementById(`f-desc-${l.code}`);
+    if (dEl) dEl.value = (spot.description || {})[l.code] || '';
+    const aEl = document.getElementById(`f-addr-${l.code}`);
+    if (aEl) aEl.value = (spot.address || {})[l.code] || '';
+  });
   document.getElementById('f-category').value = spot.category || 'heritage';
   document.getElementById('f-radius').value   = spot.radius || 50;
   document.getElementById('f-lat').value      = spot.lat;
   document.getElementById('f-lng').value      = spot.lng;
-  document.getElementById('f-desc-en').value  = spot.description.en || '';
-  document.getElementById('f-desc-jp').value  = spot.description.jp || '';
-  document.getElementById('f-desc-zh').value  = spot.description.zh || '';
-  document.getElementById('f-addr-en').value  = (spot.address || {}).en || '';
-  document.getElementById('f-addr-jp').value  = (spot.address || {}).jp || '';
-  document.getElementById('f-addr-zh').value  = (spot.address || {}).zh || '';
   document.getElementById('f-hours-open').value  = (spot.hours || {}).open  || '09:00';
   document.getElementById('f-hours-close').value = (spot.hours || {}).close || '17:00';
   setClosedDays((spot.hours || {}).closed_days || []);
-  switchDescTab('jp');
   switchNameTab('jp');
+  switchDescTab('jp');
   switchAddrTab('jp');
   document.getElementById('form-modal').classList.add('open');
   requestAnimationFrame(() => {
@@ -938,25 +986,28 @@ document.getElementById('form-modal').addEventListener('click', e => {
 // ─────────────────────────────────────────────────────────
 //  Tabs
 // ─────────────────────────────────────────────────────────
-function switchDescTab(lang) {
-  document.querySelectorAll('.desc-tab[id^="dtab-"]').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('[data-dtab]').forEach(b  => b.classList.remove('active'));
-  document.getElementById(`dtab-${lang}`).classList.add('active');
-  document.querySelector(`[data-dtab="${lang}"]`).classList.add('active');
+function switchNameTab(code) {
+  document.querySelectorAll('#name-lang-fields .desc-tab').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(`ntab-${code}`);
+  if (el) el.classList.add('active');
+  const sel = document.getElementById('name-lang-sel');
+  if (sel) sel.value = code;
 }
 
-function switchNameTab(lang) {
-  document.querySelectorAll('.desc-tab[id^="ntab-"]').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('[data-ntab]').forEach(b  => b.classList.remove('active'));
-  document.getElementById(`ntab-${lang}`).classList.add('active');
-  document.querySelector(`[data-ntab="${lang}"]`).classList.add('active');
+function switchDescTab(code) {
+  document.querySelectorAll('#desc-lang-fields .desc-tab').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(`dtab-${code}`);
+  if (el) el.classList.add('active');
+  const sel = document.getElementById('desc-lang-sel');
+  if (sel) sel.value = code;
 }
 
-function switchAddrTab(lang) {
-  document.querySelectorAll('.desc-tab[id^="atab-"]').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('[data-atab]').forEach(b  => b.classList.remove('active'));
-  document.getElementById(`atab-${lang}`).classList.add('active');
-  document.querySelector(`[data-atab="${lang}"]`).classList.add('active');
+function switchAddrTab(code) {
+  document.querySelectorAll('#addr-lang-fields .desc-tab').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(`atab-${code}`);
+  if (el) el.classList.add('active');
+  const sel = document.getElementById('addr-lang-sel');
+  if (sel) sel.value = code;
 }
 
 function setClosedDays(days) {
@@ -984,32 +1035,37 @@ async function handleFormSubmit(e) {
     return;
   }
 
-  const nameEn = document.getElementById('f-name-en').value.trim();
+  const nameEn = (document.getElementById('f-name-en') || {}).value?.trim() || '';
   if (!nameEn) { showToast('English name is required'); return; }
 
-  const addrJp = document.getElementById('f-addr-jp').value.trim();
-  const addrEn = document.getElementById('f-addr-en').value.trim();
-  const addrZh = document.getElementById('f-addr-zh').value.trim();
   const hoursOpen  = document.getElementById('f-hours-open').value;
   const hoursClose = document.getElementById('f-hours-close').value;
   const closedDays = getClosedDays();
+
+  // Collect all language values
+  const nameObj = {}, descObj = {}, addrObj = {};
+  LANGS.forEach(l => {
+    const nEl = document.getElementById(`f-name-${l.code}`);
+    const dEl = document.getElementById(`f-desc-${l.code}`);
+    const aEl = document.getElementById(`f-addr-${l.code}`);
+    nameObj[l.code] = nEl ? nEl.value.trim() : '';
+    descObj[l.code] = dEl ? dEl.value.trim() : '';
+    addrObj[l.code] = aEl ? aEl.value.trim() : '';
+  });
+  // jp/zh name/desc fallback to en when empty
+  if (!nameObj.jp) nameObj.jp = nameEn;
+  if (!nameObj.zh) nameObj.zh = nameEn;
+  if (!descObj.jp) descObj.jp = descObj.en;
+  if (!descObj.zh) descObj.zh = descObj.en;
 
   const spot = {
     id:       document.getElementById('f-id').value || genId(),
     category: document.getElementById('f-category').value,
     lat, lng,
     radius:   parseInt(document.getElementById('f-radius').value, 10) || 50,
-    name: {
-      en: nameEn,
-      jp: document.getElementById('f-name-jp').value.trim() || nameEn,
-      zh: document.getElementById('f-name-zh').value.trim() || nameEn
-    },
-    description: {
-      en: document.getElementById('f-desc-en').value.trim(),
-      jp: document.getElementById('f-desc-jp').value.trim() || document.getElementById('f-desc-en').value.trim(),
-      zh: document.getElementById('f-desc-zh').value.trim() || document.getElementById('f-desc-en').value.trim()
-    },
-    address: { en: addrEn, jp: addrJp, zh: addrZh },
+    name:        nameObj,
+    description: descObj,
+    address:     addrObj,
     hours:   { open: hoursOpen, close: hoursClose, closed_days: closedDays }
   };
 
@@ -1669,6 +1725,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // and any other path that might leave EN in an active state.
   switchDescTab('jp');
   switchNameTab('jp');
+
+  // Build 15-language input panels for the form
+  buildFormLangFields();
 
   // Day-label toggle styling
   document.getElementById('closed-days-row').addEventListener('change', e => {

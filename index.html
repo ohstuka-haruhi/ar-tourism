@@ -47,13 +47,16 @@
     #top-right { display: flex; gap: 8px; align-items: center; }
 
     /* language switcher */
-    #lang-switcher { display: flex; gap: 4px; }
-    #lang-switcher button {
+    #lang-switcher { display: flex; }
+    #lang-select {
       background: rgba(255,255,255,0.88); border: 1px solid rgba(0,0,0,0.14);
-      color: #1a1a2e; padding: 5px 11px; border-radius: 8px; font-size: 12px;
-      font-weight: 600; cursor: pointer; transition: background 0.15s;
+      color: #1a1a2e; padding: 5px 22px 5px 10px; border-radius: 8px; font-size: 12px;
+      font-weight: 600; cursor: pointer;
+      -webkit-appearance: none; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23666'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 8px center;
+      max-width: 130px;
     }
-    #lang-switcher button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
     /* list-view toggle */
     #list-btn {
@@ -511,9 +514,23 @@
     <div id="top-right">
       <button id="list-btn" onclick="toggleFallback(true)">☰ List</button>
       <div id="lang-switcher">
-        <button data-lang="en" onclick="setLang('en')">EN</button>
-        <button data-lang="jp" onclick="setLang('jp')">JP</button>
-        <button data-lang="zh" onclick="setLang('zh')">ZH</button>
+        <select id="lang-select" onchange="setLang(this.value)">
+          <option value="jp">日本語</option>
+          <option value="en">English</option>
+          <option value="zh">中文</option>
+          <option value="hi">हिंदी</option>
+          <option value="es">Español</option>
+          <option value="fr">Français</option>
+          <option value="ar">العربية</option>
+          <option value="bn">বাংলা</option>
+          <option value="pt">Português</option>
+          <option value="ru">Русский</option>
+          <option value="ur">اردو</option>
+          <option value="id">Indonesia</option>
+          <option value="de">Deutsch</option>
+          <option value="ko">한국어</option>
+          <option value="ms">Melayu</option>
+        </select>
       </div>
     </div>
   </div>
@@ -657,6 +674,126 @@ const I18N = {
     closeList:    '关闭列表',
     fallbackMsg:  reason => `${reason} — AR叠加层不可用。您仍可在下方浏览景点。`,
     cat: { heritage:'文化遗产', nature:'自然景观', facility:'公共设施', shop:'商店', default:'景点' }
+  },
+  hi: {
+    nearby: 'पास के स्थान', away: 'दूर',
+    noSpots: 'पास कोई स्थान नहीं मिला', allSpots: 'सभी स्थान',
+    gpsWait: 'GPS: खोज रहा है…', gpsOk: acc => `GPS: ±${Math.round(acc)}m`,
+    gpsDenied: 'GPS: अनुमति नहीं', gpsError: 'GPS: उपलब्ध नहीं',
+    camDenied: 'कैमरा अनुमति नहीं', noCamera: 'कैमरा उपलब्ध नहीं',
+    listView: 'सभी स्थान देखें:', tryAR: 'AR फिर आज़माएं', closeList: 'सूची बंद करें',
+    fallbackMsg: r => `${r} — AR उपलब्ध नहीं। नीचे स्थान देखें।`,
+    cat: { heritage:'ऐतिहासिक', nature:'प्रकृति', facility:'सुविधा', shop:'दुकान', default:'स्थान' }
+  },
+  es: {
+    nearby: 'Lugares cercanos', away: 'de distancia',
+    noSpots: 'No se detectaron lugares cercanos', allSpots: 'Todos los lugares',
+    gpsWait: 'GPS: localizando…', gpsOk: acc => `GPS: ±${Math.round(acc)}m`,
+    gpsDenied: 'GPS: permiso denegado', gpsError: 'GPS: no disponible',
+    camDenied: 'Permiso de cámara denegado', noCamera: 'Cámara no disponible',
+    listView: 'Ver todos los lugares:', tryAR: 'Reintentar AR', closeList: 'Cerrar lista',
+    fallbackMsg: r => `${r} — AR no disponible. Explore los lugares abajo.`,
+    cat: { heritage:'Patrimonio', nature:'Naturaleza', facility:'Instalación', shop:'Tienda', default:'Lugar' }
+  },
+  fr: {
+    nearby: 'Lieux à proximité', away: 'de distance',
+    noSpots: 'Aucun lieu détecté à proximité', allSpots: 'Tous les lieux',
+    gpsWait: 'GPS: localisation…', gpsOk: acc => `GPS: ±${Math.round(acc)}m`,
+    gpsDenied: 'GPS: permission refusée', gpsError: 'GPS: indisponible',
+    camDenied: 'Permission caméra refusée', noCamera: 'Caméra indisponible',
+    listView: 'Voir tous les lieux:', tryAR: 'Réessayer AR', closeList: 'Fermer la liste',
+    fallbackMsg: r => `${r} — AR indisponible. Parcourez les lieux ci-dessous.`,
+    cat: { heritage:'Patrimoine', nature:'Nature', facility:'Équipement', shop:'Boutique', default:'Lieu' }
+  },
+  ar: {
+    nearby: 'الأماكن القريبة', away: 'على بعد',
+    noSpots: 'لا توجد أماكن قريبة', allSpots: 'جميع الأماكن',
+    gpsWait: 'GPS: جاري التحديد…', gpsOk: acc => `GPS: ±${Math.round(acc)}م`,
+    gpsDenied: 'GPS: تم رفض الإذن', gpsError: 'GPS: غير متاح',
+    camDenied: 'تم رفض إذن الكاميرا', noCamera: 'الكاميرا غير متاحة',
+    listView: 'تصفح جميع الأماكن:', tryAR: 'إعادة محاولة AR', closeList: 'إغلاق القائمة',
+    fallbackMsg: r => `${r} — AR غير متاح. يمكنك تصفح الأماكن أدناه.`,
+    cat: { heritage:'تراث', nature:'طبيعة', facility:'مرفق', shop:'متجر', default:'مكان' }
+  },
+  bn: {
+    nearby: 'কাছের স্থান', away: 'দূরে',
+    noSpots: 'কাছে কোনো স্থান পাওয়া যায়নি', allSpots: 'সকল স্থান',
+    gpsWait: 'GPS: অবস্থান খোঁজা হচ্ছে…', gpsOk: acc => `GPS: ±${Math.round(acc)}m`,
+    gpsDenied: 'GPS: অনুমতি প্রত্যাখ্যাত', gpsError: 'GPS: পাওয়া যাচ্ছে না',
+    camDenied: 'ক্যামেরার অনুমতি প্রত্যাখ্যাত', noCamera: 'ক্যামেরা পাওয়া যাচ্ছে না',
+    listView: 'সকল স্থান দেখুন:', tryAR: 'AR আবার চেষ্টা করুন', closeList: 'তালিকা বন্ধ করুন',
+    fallbackMsg: r => `${r} — AR পাওয়া যাচ্ছে না। নিচে স্থানগুলি দেখুন।`,
+    cat: { heritage:'ঐতিহ্য', nature:'প্রকৃতি', facility:'সুবিধা', shop:'দোকান', default:'স্থান' }
+  },
+  pt: {
+    nearby: 'Locais próximos', away: 'de distância',
+    noSpots: 'Nenhum local detectado próximo', allSpots: 'Todos os locais',
+    gpsWait: 'GPS: localizando…', gpsOk: acc => `GPS: ±${Math.round(acc)}m`,
+    gpsDenied: 'GPS: permissão negada', gpsError: 'GPS: indisponível',
+    camDenied: 'Permissão de câmera negada', noCamera: 'Câmera indisponível',
+    listView: 'Ver todos os locais:', tryAR: 'Tentar AR novamente', closeList: 'Fechar lista',
+    fallbackMsg: r => `${r} — AR indisponível. Explore os locais abaixo.`,
+    cat: { heritage:'Patrimônio', nature:'Natureza', facility:'Instalação', shop:'Loja', default:'Local' }
+  },
+  ru: {
+    nearby: 'Ближайшие места', away: 'расстояние',
+    noSpots: 'Рядом мест не обнаружено', allSpots: 'Все места',
+    gpsWait: 'GPS: определение…', gpsOk: acc => `GPS: ±${Math.round(acc)}м`,
+    gpsDenied: 'GPS: доступ запрещён', gpsError: 'GPS: недоступен',
+    camDenied: 'Доступ к камере запрещён', noCamera: 'Камера недоступна',
+    listView: 'Все места:', tryAR: 'Повторить AR', closeList: 'Закрыть список',
+    fallbackMsg: r => `${r} — AR недоступен. Места можно просмотреть ниже.`,
+    cat: { heritage:'Наследие', nature:'Природа', facility:'Объект', shop:'Магазин', default:'Место' }
+  },
+  ur: {
+    nearby: 'قریبی مقامات', away: 'دور',
+    noSpots: 'قریب کوئی مقام نہیں ملا', allSpots: 'تمام مقامات',
+    gpsWait: 'GPS: تلاش کر رہا ہے…', gpsOk: acc => `GPS: ±${Math.round(acc)}m`,
+    gpsDenied: 'GPS: اجازت نہیں', gpsError: 'GPS: دستیاب نہیں',
+    camDenied: 'کیمرہ کی اجازت نہیں', noCamera: 'کیمرہ دستیاب نہیں',
+    listView: 'تمام مقامات دیکھیں:', tryAR: 'AR دوبارہ آزمائیں', closeList: 'فہرست بند کریں',
+    fallbackMsg: r => `${r} — AR دستیاب نہیں۔ نیچے مقامات دیکھیں۔`,
+    cat: { heritage:'ورثہ', nature:'فطرت', facility:'سہولت', shop:'دکان', default:'مقام' }
+  },
+  id: {
+    nearby: 'Tempat terdekat', away: 'jauhnya',
+    noSpots: 'Tidak ada tempat di dekat sini', allSpots: 'Semua tempat',
+    gpsWait: 'GPS: mencari lokasi…', gpsOk: acc => `GPS: ±${Math.round(acc)}m`,
+    gpsDenied: 'GPS: izin ditolak', gpsError: 'GPS: tidak tersedia',
+    camDenied: 'Izin kamera ditolak', noCamera: 'Kamera tidak tersedia',
+    listView: 'Lihat semua tempat:', tryAR: 'Coba AR lagi', closeList: 'Tutup daftar',
+    fallbackMsg: r => `${r} — AR tidak tersedia. Anda masih bisa melihat tempat di bawah.`,
+    cat: { heritage:'Warisan', nature:'Alam', facility:'Fasilitas', shop:'Toko', default:'Tempat' }
+  },
+  de: {
+    nearby: 'Orte in der Nähe', away: 'entfernt',
+    noSpots: 'Keine Orte in der Nähe erkannt', allSpots: 'Alle Orte',
+    gpsWait: 'GPS: Standort wird ermittelt…', gpsOk: acc => `GPS: ±${Math.round(acc)}m`,
+    gpsDenied: 'GPS: Berechtigung verweigert', gpsError: 'GPS: nicht verfügbar',
+    camDenied: 'Kamera-Berechtigung verweigert', noCamera: 'Kamera nicht verfügbar',
+    listView: 'Alle Orte anzeigen:', tryAR: 'AR erneut versuchen', closeList: 'Liste schließen',
+    fallbackMsg: r => `${r} — AR nicht verfügbar. Sie können Orte unten durchsuchen.`,
+    cat: { heritage:'Erbe', nature:'Natur', facility:'Einrichtung', shop:'Geschäft', default:'Ort' }
+  },
+  ko: {
+    nearby: '근처 명소', away: '거리',
+    noSpots: '근처에 명소가 없습니다', allSpots: '모든 명소',
+    gpsWait: 'GPS: 위치 찾는 중…', gpsOk: acc => `GPS: ±${Math.round(acc)}m`,
+    gpsDenied: 'GPS: 권한 거부됨', gpsError: 'GPS: 사용 불가',
+    camDenied: '카메라 권한 거부됨', noCamera: '카메라 사용 불가',
+    listView: '모든 명소 보기:', tryAR: 'AR 다시 시도', closeList: '목록 닫기',
+    fallbackMsg: r => `${r} — AR을 사용할 수 없습니다. 아래에서 명소를 탐색할 수 있습니다.`,
+    cat: { heritage:'문화유산', nature:'자연', facility:'시설', shop:'상점', default:'명소' }
+  },
+  ms: {
+    nearby: 'Tempat berdekatan', away: 'jauh',
+    noSpots: 'Tiada tempat ditemui berdekatan', allSpots: 'Semua tempat',
+    gpsWait: 'GPS: mencari lokasi…', gpsOk: acc => `GPS: ±${Math.round(acc)}m`,
+    gpsDenied: 'GPS: kebenaran ditolak', gpsError: 'GPS: tidak tersedia',
+    camDenied: 'Kebenaran kamera ditolak', noCamera: 'Kamera tidak tersedia',
+    listView: 'Lihat semua tempat:', tryAR: 'Cuba AR semula', closeList: 'Tutup senarai',
+    fallbackMsg: r => `${r} — AR tidak tersedia. Anda masih boleh melayari tempat di bawah.`,
+    cat: { heritage:'Warisan', nature:'Alam semula jadi', facility:'Kemudahan', shop:'Kedai', default:'Tempat' }
   }
 };
 
@@ -678,14 +815,16 @@ const tCat = cat => (I18N[lang].cat || {})[cat] || (I18N.en.cat[cat]) || cat;
 function setLang(l) {
   lang = l;
   localStorage.setItem('arLang', l);
-  document.querySelectorAll('#lang-switcher button')
-    .forEach(b => b.classList.toggle('active', b.dataset.lang === l));
-  document.getElementById('list-btn').textContent     = '☰ List';
-  document.getElementById('nearby-label').textContent = t('nearby');
-  document.getElementById('retry-btn').textContent    = t('tryAR');
+  const sel = document.getElementById('lang-select');
+  if (sel) sel.value = l;
+  // RTL layout for Arabic and Urdu
+  document.body.dir = (l === 'ar' || l === 'ur') ? 'rtl' : 'ltr';
+  document.getElementById('list-btn').textContent       = '☰ List';
+  document.getElementById('nearby-label').textContent   = t('nearby');
+  document.getElementById('retry-btn').textContent      = t('tryAR');
   document.getElementById('close-list-btn').textContent = t('closeList');
   refreshChips();
-  refreshFallbackList();   // also rebuilds filter bar labels
+  refreshFallbackList();
   clearAROverlay();
   scheduleOverlay();
   if (document.getElementById('modal').classList.contains('open') && window._activeSpot) {
@@ -747,7 +886,7 @@ function refreshChips() {
     chip.style.borderColor = `${color}66`;
     chip.innerHTML = `
       <span class="chip-name">
-        <span class="chip-dot" style="background:${dotColor}"></span>${s.name[lang] || s.name.en}
+        <span class="chip-dot" style="background:${dotColor}"></span>${s.name[lang] || s.name.jp || s.name.en}
       </span>
       <span class="chip-dist" style="color:${color}">${dist !== null ? Math.round(dist) + 'm' : '—'}</span>
     `;
@@ -773,11 +912,11 @@ function openModal(spot, dist) {
   window._activeSpot = spot;
   window._activeDist = dist;
   document.getElementById('modal-cat').textContent  = tCat(spot.category || 'default');
-  document.getElementById('modal-name').textContent = spot.name[lang] || spot.name.en;
+  document.getElementById('modal-name').textContent = spot.name[lang] || spot.name.jp || spot.name.en;
   document.getElementById('modal-dist').textContent =
     dist != null ? `${Math.round(dist)}m ${t('away')}` : '';
   document.getElementById('modal-desc').textContent =
-    spot.description[lang] || spot.description.en || '';
+    spot.description[lang] || spot.description.jp || spot.description.en || '';
 
   // 営業時間バー
   const hoursBar  = document.getElementById('modal-hours-bar');
@@ -859,7 +998,7 @@ function initModalMap(spot) {
     iconSize: [32, 32], iconAnchor: [16, 16]
   });
   L.marker([spot.lat, spot.lng], { icon: spotIcon })
-    .bindPopup(spot.name[lang] || spot.name.en)
+    .bindPopup(spot.name[lang] || spot.name.jp || spot.name.en)
     .addTo(_modalMap);
   bounds.push([spot.lat, spot.lng]);
 
@@ -1201,10 +1340,10 @@ function refreshFallbackList() {
         card.classList.add('hidden');
       }
       const color = catColor(s.category);
-      const desc  = s.description[lang] || s.description.en || '';
+      const desc  = s.description[lang] || s.description.jp || s.description.en || '';
       card.innerHTML = `
         <div class="fb-card-header">
-          <h3>${s.name[lang] || s.name.en}</h3>
+          <h3>${s.name[lang] || s.name.jp || s.name.en}</h3>
           <span class="fb-badge" style="background:${color}22;color:${color}">
             ${CAT_ICON_MAP[s.category] || '📍'} ${tCat(s.category || 'default')}
           </span>
@@ -1471,7 +1610,7 @@ function renderAROverlay() {
       el.style.top             = `${startY + i * (EDGE_H + EDGE_GAP)}px`;
       el.querySelector('.ar-edge-icon').style.color = color;
       el.querySelector('.ar-edge-dist').style.color = color;
-      el.querySelector('.ar-edge-name').textContent = d.spot.name[lang] || d.spot.name.en;
+      el.querySelector('.ar-edge-name').textContent = d.spot.name[lang] || d.spot.name.jp || d.spot.name.en;
       el.querySelector('.ar-edge-dist').textContent = `${Math.round(d.dist)}m`;
     });
   });
@@ -1487,7 +1626,7 @@ function updateFrontIndicator(d) {
   el.querySelector('.fi-arrow').style.color = color;
   el.querySelector('.fi-dist').style.color  = color;
   el.querySelector('.fi-name').textContent  =
-    (d.spot.name[lang] || d.spot.name.en).slice(0, 18);
+    (d.spot.name[lang] || d.spot.name.jp || d.spot.name.en).slice(0, 18);
   el.querySelector('.fi-dist').textContent  = `${Math.round(d.dist)}m`;
   el.classList.add('visible');
 }
@@ -1523,8 +1662,8 @@ function buildCalloutEl(spot) {
 function refreshCallout(el, spot, dist) {
   el.querySelector('.ar-cat-icon').textContent  = CAT_ICON_MAP[spot.category] || CAT_ICON_MAP.default;
   el.querySelector('.ar-cat-label').textContent = tCat(spot.category || 'default');
-  el.querySelector('.ar-spot-name').textContent = spot.name[lang] || spot.name.en;
-  const desc = spot.description[lang] || spot.description.en || '';
+  el.querySelector('.ar-spot-name').textContent = spot.name[lang] || spot.name.jp || spot.name.en;
+  const desc = spot.description[lang] || spot.description.jp || spot.description.en || '';
   el.querySelector('.ar-spot-desc').textContent = firstSentence(desc);
   el.querySelector('.ar-spot-dist').textContent = `${Math.round(dist)}m`;
 }
@@ -1988,8 +2127,9 @@ const Vision = (() => {
 // ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   // Apply saved language
-  document.querySelectorAll('#lang-switcher button')
-    .forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+  const _sel = document.getElementById('lang-select');
+  if (_sel) _sel.value = lang;
+  if (lang === 'ar' || lang === 'ur') document.body.dir = 'rtl';
   document.getElementById('nearby-label').textContent = t('nearby');
 
   Analytics.init();
