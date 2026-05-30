@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <title>AR Tourism – Yamadera</title>
+  <title>Navigation AR</title>
 
   <!-- A-Frame + AR.js (location-based) -->
   <script src="https://cdn.jsdelivr.net/npm/aframe@1.4.0/dist/aframe-master.min.js"></script>
@@ -552,7 +552,7 @@
 <!-- ── UI Overlay ── -->
 <div id="ui">
   <div id="top-bar">
-    <span id="app-title">⛩ Yamadera AR</span>
+    <span id="app-title">⛩ ナビゲーションAR</span>
     <div id="top-right">
       <button id="list-btn" onclick="toggleFallback(true)">☰ List</button>
       <div id="lang-switcher">
@@ -647,7 +647,7 @@
 <div id="fallback">
   <div id="fb-header">
     <div id="fb-icon">⛩</div>
-    <h1 id="fb-title">Yamadera Guide</h1>
+    <h1 id="fb-title">ナビゲーションAR</h1>
     <p id="fb-msg"></p>
     <div id="fb-actions">
       <button class="fb-btn primary" onclick="retryAR()" id="retry-btn">Try AR Again</button>
@@ -1306,7 +1306,7 @@ function updateMiniMapPos() {
 function toggleFallback(show) {
   const el = document.getElementById('fallback');
   if (show) {
-    document.getElementById('fb-title').textContent = 'Yamadera Guide';
+    document.getElementById('fb-title').textContent = 'ナビゲーションAR';
     document.getElementById('fb-msg').textContent   = fallbackReason || t('listView');
     el.classList.add('show');
     activeFilter = 'all';   // reset filter on open
