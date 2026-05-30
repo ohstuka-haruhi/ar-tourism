@@ -472,9 +472,10 @@
   <!-- ── Tracks tab ── -->
   <div id="tab-tracks" style="display:none">
     <div id="tracks-controls">
-      <button class="btn btn-sm tracks-mode-btn active" id="btn-routes" onclick="setTracksMode('routes')">👤 個人ルート</button>
-      <button class="btn btn-sm tracks-mode-btn"        id="btn-heat"   onclick="setTracksMode('heat')">🔥 ヒートマップ</button>
-      <button class="btn btn-secondary btn-sm" onclick="loadTracks()">🔄 更新</button>
+      <button class="btn btn-sm tracks-mode-btn active" id="btn-routes"  onclick="setTracksMode('routes')">👤 個人ルート</button>
+      <button class="btn btn-sm tracks-mode-btn"        id="btn-pathway" onclick="setTracksMode('pathway')">🛤 通路</button>
+      <button class="btn btn-sm tracks-mode-btn"        id="btn-heat"    onclick="setTracksMode('heat')">🔥 ヒートマップ</button>
+      <button class="btn btn-secondary btn-sm" onclick="reloadTracksTab()">🔄 更新</button>
       <span id="tracks-info"></span>
     </div>
     <div id="tracks-map"></div>
@@ -1523,17 +1524,19 @@ function showTab(tab) {
   document.getElementById('tab-analytics').style.display = tab === 'analytics' ? '' : 'none';
   document.getElementById('tab-tracks').style.display    = tab === 'tracks'    ? '' : 'none';
   if (tab === 'analytics') loadAnalytics();
-  if (tab === 'tracks')    { initTracksMap(); loadTracks(); }
+  if (tab === 'tracks')    { initTracksMap(); loadTracks(); loadPathways(); }
 }
 
 // ─────────────────────────────────────────────────────────
 //  Tracks map
 // ─────────────────────────────────────────────────────────
-let _tracksMap     = null;
-let _tracksData    = [];
-let _tracksMode    = 'routes';
-let _routeLayer    = null;
-let _heatLayer     = null;
+let _tracksMap      = null;
+let _tracksData     = [];
+let _pathwayData    = [];   // entries from routes.json with type='pathway'
+let _tracksMode     = 'routes';
+let _routeLayer     = null;
+let _heatLayer      = null;
+let _pathwayLayer   = null;
 let _tracksMapReady = false;
 
 const ROUTE_COLORS = [
@@ -1557,26 +1560,57 @@ async function loadTracks() {
     const r = await fetch('/tracks');
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     _tracksData = await r.json();
-    const totalPts = _tracksData.reduce((s, t) => s + (t.points || []).length, 0);
-    document.getElementById('tracks-info').textContent =
-      `${_tracksData.length}セッション・計${totalPts}点`;
-    renderTracks();
   } catch(e) {
+    _tracksData = [];
     document.getElementById('tracks-info').textContent = '読み込み失敗: ' + e.message;
+    return;
   }
+  updateTracksInfo();
+  renderTracks();
+}
+
+async function loadPathways() {
+  try {
+    const r = await fetch('/routes.json');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const all = await r.json();
+    _pathwayData = Array.isArray(all) ? all.filter(e => e.type === 'pathway') : [];
+  } catch(e) {
+    _pathwayData = [];
+  }
+  updateTracksInfo();
+  if (_tracksMode === 'pathway') renderTracks();
+}
+
+async function reloadTracksTab() {
+  await Promise.all([loadTracks(), loadPathways()]);
+}
+
+function updateTracksInfo() {
+  const totalPts = _tracksData.reduce((s, t) => s + (t.points || []).length, 0);
+  const trackPart   = `${_tracksData.length}セッション・計${totalPts}点`;
+  const pathwayPart = _pathwayData.length ? `　／　通路 ${_pathwayData.length}本` : '';
+  document.getElementById('tracks-info').textContent = trackPart + pathwayPart;
 }
 
 function setTracksMode(mode) {
   _tracksMode = mode;
-  document.getElementById('btn-routes').classList.toggle('active', mode === 'routes');
-  document.getElementById('btn-heat').classList.toggle('active',   mode === 'heat');
+  document.getElementById('btn-routes') .classList.toggle('active', mode === 'routes');
+  document.getElementById('btn-pathway').classList.toggle('active', mode === 'pathway');
+  document.getElementById('btn-heat')   .classList.toggle('active', mode === 'heat');
   renderTracks();
 }
 
 function renderTracks() {
   if (!_tracksMap) return;
-  if (_routeLayer) { _tracksMap.removeLayer(_routeLayer); _routeLayer = null; }
-  if (_heatLayer)  { _tracksMap.removeLayer(_heatLayer);  _heatLayer  = null; }
+  if (_routeLayer)   { _tracksMap.removeLayer(_routeLayer);   _routeLayer   = null; }
+  if (_heatLayer)    { _tracksMap.removeLayer(_heatLayer);    _heatLayer    = null; }
+  if (_pathwayLayer) { _tracksMap.removeLayer(_pathwayLayer); _pathwayLayer = null; }
+
+  if (_tracksMode === 'pathway') {
+    _renderPathwayLayer();
+    return;
+  }
 
   const allPts = _tracksData.flatMap(t => (t.points || []).map(p => [p.lat, p.lng]));
   if (!allPts.length) return;
@@ -1591,7 +1625,6 @@ function renderTracks() {
       L.polyline(pts, { color, weight: 3, opacity: 0.78 })
         .bindPopup(`<b>${start}</b><br>${pts.length}ポイント`)
         .addTo(_routeLayer);
-      // 出発点マーカー
       L.circleMarker(pts[0], { radius: 6, fillColor: color, color: '#fff', weight: 2, fillOpacity: 1 })
         .addTo(_routeLayer);
     });
@@ -1609,6 +1642,60 @@ function renderTracks() {
     _heatLayer.addTo(_tracksMap);
     _tracksMap.fitBounds(allPts, { padding: [24, 24] });
   }
+}
+
+function _renderPathwayLayer() {
+  if (!_pathwayData.length) {
+    document.getElementById('tracks-info').textContent += '　通路データなし';
+    return;
+  }
+
+  _pathwayLayer = L.layerGroup();
+  const allPts  = [];
+
+  _pathwayData.forEach((entry, idx) => {
+    const pts = (entry.pathway || []).map(p => [p.lat, p.lng]);
+    if (pts.length < 2) return;
+    pts.forEach(p => allPts.push(p));
+
+    const color = ROUTE_COLORS[idx % ROUTE_COLORS.length];
+    const date  = entry.createdAt
+      ? new Date(entry.createdAt).toLocaleString('ja-JP')
+      : '日時不明';
+
+    // セグメントごとに距離色グラデーション（開始=緑、終了=青）
+    for (let i = 1; i < pts.length; i++) {
+      const t = i / (pts.length - 1);           // 0=start, 1=end
+      const r = Math.round(16  + t * 43);        // green→blue
+      const g = Math.round(185 - t * 55);
+      const b = Math.round(129 + t * 117);
+      const segColor = `rgb(${r},${g},${b})`;
+      L.polyline([pts[i - 1], pts[i]], {
+        color: segColor, weight: 5, opacity: 0.85
+      }).addTo(_pathwayLayer);
+    }
+
+    // 始点マーカー（緑）
+    L.circleMarker(pts[0], {
+      radius: 7, fillColor: '#10b981', color: '#fff', weight: 2, fillOpacity: 1
+    }).bindTooltip('START', { permanent: false }).addTo(_pathwayLayer);
+
+    // 終点マーカー（青）
+    L.circleMarker(pts[pts.length - 1], {
+      radius: 7, fillColor: '#3b82f6', color: '#fff', weight: 2, fillOpacity: 1
+    }).bindTooltip('END', { permanent: false }).addTo(_pathwayLayer);
+
+    // ポップアップ（ライン全体に）
+    L.polyline(pts, { color: 'transparent', weight: 12 })
+      .bindPopup(
+        `<b>${esc(entry.name || '通路データ')}</b><br>` +
+        `${date}<br>${pts.length}ポイント`
+      )
+      .addTo(_pathwayLayer);
+  });
+
+  _pathwayLayer.addTo(_tracksMap);
+  if (allPts.length) _tracksMap.fitBounds(allPts, { padding: [28, 28] });
 }
 
 // ─────────────────────────────────────────────────────────
