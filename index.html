@@ -341,25 +341,53 @@
       background: rgba(79,195,247,0.6);
     }
 
-    /* Edge direction arrows */
+    /* Edge direction arrows (3D road arrow style) */
     .ar-edge {
       position: absolute;
       pointer-events: auto; cursor: pointer;
-      display: flex; align-items: center; gap: 5px;
-      background: rgba(255, 255, 255, 0.93);
-      border: 1px solid rgba(79, 195, 247, 0.35);
-      border-radius: 20px; padding: 5px 11px 5px 8px;
+      display: flex; align-items: center; gap: 7px;
+      background: rgba(255,255,255,0.93);
+      border: 1px solid rgba(0,0,0,0.06);
+      border-radius: 14px;
       transition: top 0.15s ease-out;
-      max-width: 148px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      box-shadow: 0 3px 12px rgba(0,0,0,0.13);
     }
-    .ar-edge.side-left  { left: 6px; }
-    .ar-edge.side-right { right: 6px; }
-    /* border and background colors applied via JS (category-based) */
-    .ar-edge-icon { font-size: 12px; flex-shrink: 0; }
-    .ar-edge-info { display: flex; flex-direction: column; overflow: hidden; }
+    .ar-edge.side-left  { left: 6px; flex-direction: row;         padding: 6px 10px 6px 7px; }
+    .ar-edge.side-right { right: 6px; flex-direction: row-reverse; padding: 6px 7px 6px 10px; }
+
+    /* 3D arrow element inside edge pill */
+    .edge-3d-wrap {
+      width: 28px; height: 36px; position: relative; flex-shrink: 0;
+      /* filter (drop-shadow) applied via JS with category color */
+    }
+    .edge-arrow-body {
+      position: absolute; inset: 0;
+      transform: perspective(120px) rotateX(36deg);
+      transform-origin: center bottom;
+      transition: background 0.2s ease;
+    }
+    /* Left-pointing arrow: tip at left, base at right */
+    .edge-arrow-body.side-left {
+      clip-path: polygon(0% 50%, 38% 0%, 38% 28%, 100% 28%, 100% 72%, 38% 72%, 38% 100%);
+      /* gradient: tip(left)=faint → base(right)=solid */
+    }
+    /* Right-pointing arrow: tip at right, base at left */
+    .edge-arrow-body.side-right {
+      clip-path: polygon(100% 50%, 62% 0%, 62% 28%, 0% 28%, 0% 72%, 62% 72%, 62% 100%);
+      /* gradient: base(left)=solid → tip(right)=faint */
+    }
+    /* Center highlight stripe (clipped to arrow shape) */
+    .edge-arrow-body::before {
+      content: ''; position: absolute;
+      top: 4%; bottom: 32%; left: 44%; right: 44%;
+      background: rgba(255,255,255,0.32);
+      border-radius: 1px;
+    }
+
+    .edge-info { display: flex; flex-direction: column; overflow: hidden; }
     .ar-edge-name { font-size: 11px; font-weight: 600; color: #1a1a2e;
-                    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                    max-width: 100px; }
     .ar-edge-dist { font-size: 9px; }
 
     /* ── Front-facing distance indicator (3D road arrow) ── */
@@ -1636,7 +1664,7 @@ function renderAROverlay() {
   });
 
   // ── Render edge arrows ──
-  const EDGE_H = 42, EDGE_GAP = 6;
+  const EDGE_H = 50, EDGE_GAP = 6;
   [leftEdge, rightEdge].forEach((group, si) => {
     const side   = si === 0 ? 'left' : 'right';
     const totalH = group.length * (EDGE_H + EDGE_GAP) - EDGE_GAP;
@@ -1645,12 +1673,17 @@ function renderAROverlay() {
       let el = overlay.querySelector(`.ar-edge[data-id="${d.spot.id}"]`);
       if (!el) { el = buildEdgeEl(d.spot, side); overlay.appendChild(el); }
       const color = catColor(d.spot.category);
-      el.className             = `ar-edge side-${side}`;
-      el.style.background      = catBg(d.spot.category);
-      el.style.borderLeft      = side === 'left'  ? `2.5px solid ${color}` : '';
-      el.style.borderRight     = side === 'right' ? `2.5px solid ${color}` : '';
-      el.style.top             = `${startY + i * (EDGE_H + EDGE_GAP)}px`;
-      el.querySelector('.ar-edge-icon').style.color = color;
+      el.className   = `ar-edge side-${side}`;
+      el.style.top   = `${startY + i * (EDGE_H + EDGE_GAP)}px`;
+      // 3D arrow body: gradient fades toward tip (far end)
+      const body = el.querySelector('.edge-arrow-body');
+      if (body) {
+        body.style.background = side === 'left'
+          ? `linear-gradient(90deg, ${color}18 0%, ${color}bb 55%, ${color} 100%)`
+          : `linear-gradient(90deg, ${color} 0%, ${color}bb 45%, ${color}18 100%)`;
+      }
+      const wrap = el.querySelector('.edge-3d-wrap');
+      if (wrap) wrap.style.filter = `drop-shadow(0 6px 10px ${color}55)`;
       el.querySelector('.ar-edge-dist').style.color = color;
       el.querySelector('.ar-edge-name').textContent = d.spot.name[lang] || d.spot.name.jp || d.spot.name.en;
       el.querySelector('.ar-edge-dist').textContent = `${Math.round(d.dist)}m`;
@@ -1722,11 +1755,13 @@ function buildEdgeEl(spot, side) {
   el.className  = `ar-edge side-${side}`;
   el.dataset.id = spot.id;
   el.innerHTML  = `
-    <span class="ar-edge-icon">${side === 'left' ? '◀' : '▶'}</span>
-    <span class="ar-edge-info">
+    <div class="edge-3d-wrap">
+      <div class="edge-arrow-body side-${side}"></div>
+    </div>
+    <div class="edge-info">
       <span class="ar-edge-name"></span>
       <span class="ar-edge-dist"></span>
-    </span>
+    </div>
   `;
   el.addEventListener('click', () => {
     const s    = spots.find(s => s.id === spot.id);
