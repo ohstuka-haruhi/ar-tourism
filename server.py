@@ -382,7 +382,7 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
         line = fmt % args
         code = args[1] if len(args) > 1 else ''
-        if args and (args[0].startswith('PUT') or args[0].startswith('POST')):
+        if args and (str(args[0]).startswith('PUT') or str(args[0]).startswith('POST')):
             print(f'  \033[32m💾 {line}\033[0m')
         elif str(code).startswith(('4', '5')):
             print(f'  \033[31m✗  {line}\033[0m')
