@@ -473,6 +473,44 @@
     }
     #compass-toast.show { opacity: 1; }
 
+    /* ── Pathway recording button ── */
+    #pathway-btn {
+      position: fixed;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
+      left: 20px;
+      z-index: 9999;
+      width: 62px; height: 62px; border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.4);
+      background: #1a6e2e; color: #fff;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.03em;
+      cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      transition: background 0.2s;
+      -webkit-tap-highlight-color: transparent;
+      pointer-events: auto;
+      isolation: isolate;
+    }
+    #pathway-btn.recording {
+      background: #b71c1c;
+      animation: recPulse 1.4s ease-in-out infinite;
+    }
+    #pathway-dot   { font-size: 14px; line-height: 1; }
+    #pathway-label { font-size: 9px; }
+    #pathway-timer { font-size: 9px; font-weight: 400; font-variant-numeric: tabular-nums; }
+    #pathway-clear-btn {
+      position: fixed;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 166px);
+      left: 20px;
+      z-index: 9999;
+      display: none;
+      background: rgba(255,255,255,0.9); color: #333;
+      border: 1px solid rgba(0,0,0,0.15); border-radius: 20px;
+      font-size: 11px; font-weight: 600; padding: 5px 12px;
+      cursor: pointer; pointer-events: auto;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
     /* ── Route recording button ── */
     #rec-btn {
       position: fixed;
@@ -644,6 +682,16 @@
   <span id="rec-dot">●</span>
   <span id="rec-label">REC</span>
 </button>
+
+<!-- ── Pathway recording button ── -->
+<button id="pathway-btn" onclick="togglePathwayRecording()" title="通路を記録">
+  <span id="pathway-dot">🛤</span>
+  <span id="pathway-label">通路</span>
+</button>
+<button id="pathway-clear-btn" onclick="clearPathway()">× 通路を消す</button>
+
+<!-- ── Pathway canvas overlay ── -->
+<canvas id="pathway-canvas" style="position:fixed;inset:0;z-index:9;pointer-events:none;"></canvas>
 
 <!-- ── Route save / share modal ── -->
 <div id="route-modal" onclick="handleRouteModalBg(event)">
@@ -1689,6 +1737,7 @@ function renderAROverlay() {
       el.querySelector('.ar-edge-dist').textContent = `${Math.round(d.dist)}m`;
     });
   });
+  renderPathwayOverlay();
 }
 
 function updateFrontIndicator(d) {
@@ -1879,12 +1928,18 @@ function showRouteSaveDialog() {
 
 function cancelRouteSave() {
   document.getElementById('route-modal').classList.remove('open');
-  recPoints = [];
+  recPoints     = [];
+  pathwayPoints = [];
+  const saveBtn = document.querySelector('#route-step-name .route-btn.primary');
+  if (saveBtn) { saveBtn.onclick = saveRoute; saveBtn.textContent = 'Save & Share'; saveBtn.disabled = false; }
 }
 
 function closeRouteModal() {
   document.getElementById('route-modal').classList.remove('open');
-  recPoints = [];
+  recPoints     = [];
+  pathwayPoints = [];
+  const saveBtn = document.querySelector('#route-step-name .route-btn.primary');
+  if (saveBtn) { saveBtn.onclick = saveRoute; saveBtn.textContent = 'Save & Share'; saveBtn.disabled = false; }
 }
 
 function handleRouteModalBg(e) {
@@ -1941,6 +1996,173 @@ async function copyRouteUrl() {
   } catch {
     document.getElementById('route-share-url').select();
   }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Pathway Recording  (3s interval · AR canvas overlay)
+// ─────────────────────────────────────────────────────────
+let isPathwayRecording = false;
+let pathwayPoints      = [];
+let pathwayInterval    = null;
+let pathwayTickTimer   = null;
+let pathwayElapsed     = 0;
+let activePathway      = null;
+
+function togglePathwayRecording() {
+  if (isPathwayRecording) stopPathwayRecording(); else startPathwayRecording();
+}
+
+function startPathwayRecording() {
+  if (!userPos) { alert('GPS未取得 — しばらくお待ちください。'); return; }
+  isPathwayRecording = true;
+  pathwayPoints      = [];
+  pathwayElapsed     = 0;
+  logPathwayPoint();
+  pathwayInterval  = setInterval(logPathwayPoint, 3000);
+  pathwayTickTimer = setInterval(() => { pathwayElapsed++; updatePathwayBtn(); }, 1000);
+  updatePathwayBtn();
+}
+
+function logPathwayPoint() {
+  if (!userPos) return;
+  pathwayPoints.push({ lat: userPos.lat, lng: userPos.lng, t: Date.now() });
+}
+
+function stopPathwayRecording() {
+  clearInterval(pathwayInterval);
+  clearInterval(pathwayTickTimer);
+  pathwayInterval = pathwayTickTimer = null;
+  isPathwayRecording = false;
+  updatePathwayBtn();
+  if (pathwayPoints.length < 2) { pathwayPoints = []; return; }
+  showPathwaySaveDialog();
+}
+
+function updatePathwayBtn() {
+  const btn = document.getElementById('pathway-btn');
+  if (!btn) return;
+  if (isPathwayRecording) {
+    btn.classList.add('recording');
+    const mm = String(Math.floor(pathwayElapsed / 60)).padStart(2, '0');
+    const ss = String(pathwayElapsed % 60).padStart(2, '0');
+    document.getElementById('pathway-dot').textContent   = '■';
+    document.getElementById('pathway-label').textContent = '停止';
+    let t = document.getElementById('pathway-timer');
+    if (!t) { t = document.createElement('span'); t.id = 'pathway-timer'; btn.appendChild(t); }
+    t.textContent = `${mm}:${ss}`;
+  } else {
+    btn.classList.remove('recording');
+    document.getElementById('pathway-dot').textContent   = '🛤';
+    document.getElementById('pathway-label').textContent = '通路';
+    const t = document.getElementById('pathway-timer');
+    if (t) t.remove();
+  }
+}
+
+function showPathwaySaveDialog() {
+  let dist = 0;
+  for (let i = 1; i < pathwayPoints.length; i++)
+    dist += haversine(pathwayPoints[i-1].lat, pathwayPoints[i-1].lng,
+                      pathwayPoints[i].lat,   pathwayPoints[i].lng);
+  const distLabel = dist >= 1000 ? `${(dist/1000).toFixed(2)}km` : `${Math.round(dist)}m`;
+  document.getElementById('route-modal-stats').textContent =
+    `通路 ${pathwayPoints.length}地点 · ${distLabel} を記録`;
+  document.getElementById('route-name-input').value = '通路データ';
+  document.getElementById('route-step-name').style.display  = '';
+  document.getElementById('route-step-share').style.display = 'none';
+  const saveBtn = document.querySelector('#route-step-name .route-btn.primary');
+  saveBtn.textContent = '保存して表示';
+  saveBtn.disabled    = false;
+  saveBtn.onclick     = savePathway;
+  document.getElementById('route-modal').classList.add('open');
+}
+
+async function savePathway() {
+  const name    = document.getElementById('route-name-input').value.trim() || '通路データ';
+  const saveBtn = document.querySelector('#route-step-name .route-btn.primary');
+  saveBtn.textContent = '保存中…';
+  saveBtn.disabled    = true;
+  try {
+    const r    = await fetch('routes.json', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ name, type: 'pathway', createdAt: new Date().toISOString(), pathway: pathwayPoints })
+    });
+    const data = await r.json();
+    if (!data.id) throw new Error(data.error || 'Unknown error');
+    activePathway = pathwayPoints.slice();
+    pathwayPoints = [];
+    document.getElementById('pathway-clear-btn').style.display = 'block';
+    document.getElementById('route-modal').classList.remove('open');
+    scheduleOverlay();
+  } catch(e) {
+    console.error('Pathway save failed:', e);
+    alert('保存失敗: ' + e.message);
+    saveBtn.textContent = '保存して表示';
+    saveBtn.disabled    = false;
+  }
+}
+
+function clearPathway() {
+  activePathway = null;
+  document.getElementById('pathway-clear-btn').style.display = 'none';
+  const canvas = document.getElementById('pathway-canvas');
+  if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function projectPathPoint(lat, lng) {
+  if (!userPos || compassHeading === null) return null;
+  const dist = haversine(userPos.lat, userPos.lng, lat, lng);
+  if (dist > 100) return null;
+  const brg     = bearingTo(userPos.lat, userPos.lng, lat, lng);
+  const rel     = normAngle(brg - compassHeading);
+  const W       = window.innerWidth, H = window.innerHeight;
+  const halfFov = H_FOV / 2;
+  const pitchY  = H * Math.min(Math.max(0.26 + (deviceBeta - 50) * 0.006, 0.24), 0.60);
+  const screenX = W / 2 + (rel / halfFov) * (W / 2);
+  const screenY = pitchY + (H * 0.95 - pitchY) / (1 + dist / 5);
+  return { x: screenX, y: screenY, dist };
+}
+
+function pathwayDistColor(dist) {
+  const t = Math.min(dist / 50, 1);
+  const r = Math.round(16  + t * 43);
+  const g = Math.round(185 - t * 55);
+  const b = Math.round(129 + t * 117);
+  return `rgb(${r},${g},${b})`;
+}
+
+function renderPathwayOverlay() {
+  const canvas = document.getElementById('pathway-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  if (!activePathway || activePathway.length < 2 || !userPos || compassHeading === null) return;
+  const projected = activePathway.map(p => projectPathPoint(p.lat, p.lng));
+  ctx.lineCap  = 'round';
+  ctx.lineJoin = 'round';
+  for (let i = 1; i < projected.length; i++) {
+    const p0 = projected[i - 1], p1 = projected[i];
+    if (!p0 || !p1) continue;
+    const d = (p0.dist + p1.dist) / 2;
+    ctx.beginPath();
+    ctx.moveTo(p0.x, p0.y);
+    ctx.lineTo(p1.x, p1.y);
+    ctx.strokeStyle = pathwayDistColor(d);
+    ctx.lineWidth   = Math.max(2, 7 * (1 - d / 60));
+    ctx.globalAlpha = Math.max(0.25, 1 - d / 80);
+    ctx.stroke();
+  }
+  projected.forEach(p => {
+    if (!p) return;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(2, 4.5 * (1 - p.dist / 60)), 0, Math.PI * 2);
+    ctx.fillStyle   = pathwayDistColor(p.dist);
+    ctx.globalAlpha = Math.max(0.3, 1 - p.dist / 80);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
 }
 
 // ─────────────────────────────────────────────────────────
