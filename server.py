@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Development server for AR Tourism Guide.
-Serves static files and accepts PUT /spots.json and POST /routes.json.
+Serves static files and accepts PUT /spots.json, POST /routes.json.
+Analytics, tracks, and routes are stored in Supabase.
 
 Usage:
     python3 server.py          # port 8080
@@ -13,15 +14,20 @@ import secrets
 import sys
 import urllib.request
 import urllib.error
+import urllib.parse
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 PORT = int(os.environ.get('PORT', sys.argv[1] if len(sys.argv) > 1 else 8080))
-SPOTS_FILE      = 'spots.json'
-ROUTES_FILE     = 'routes.json'
-ANALYTICS_FILE  = 'analytics.json'
-TRACKS_FILE     = 'tracks.json'
-QR_DIR          = 'qr'
-COMPILED_DIR    = 'compiled'
+SPOTS_FILE   = 'spots.json'
+ROUTES_FILE  = 'routes.json'
+QR_DIR       = 'qr'
+COMPILED_DIR = 'compiled'
+
+SUPABASE_URL = 'https://pjcbjkjzxzwbxwmrebud.supabase.co'
+SUPABASE_KEY = os.environ.get(
+    'SUPABASE_KEY',
+    'sb_publishable__yZXAucrH0PmJkCdDYX7dA_gpGyRedn'
+)
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -37,77 +43,88 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_response(204)
         self.end_headers()
 
-    # ── GET /analytics → return analytics.json ──────────────
+    # ── Supabase REST helper ─────────────────────────────────
+    def _sb(self, method, path, body=None, extra=None):
+        """Call Supabase PostgREST. Returns parsed JSON or [] on empty body."""
+        url  = f'{SUPABASE_URL}/rest/v1/{path}'
+        hdrs = {
+            'apikey':        SUPABASE_KEY,
+            'Authorization': f'Bearer {SUPABASE_KEY}',
+            'Content-Type':  'application/json',
+        }
+        if extra:
+            hdrs.update(extra)
+        data = json.dumps(body).encode() if body is not None else None
+        req  = urllib.request.Request(url, data=data, headers=hdrs, method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                raw = resp.read()
+                return json.loads(raw) if raw.strip() else []
+        except urllib.error.HTTPError as e:
+            err = e.read().decode(errors='replace')
+            raise RuntimeError(f'Supabase {method} /{path}: HTTP {e.code} — {err[:300]}')
+
+    # ── GET ──────────────────────────────────────────────────
     def do_GET(self):
         path = self.path.rstrip('/')
         if path == '/analytics':
             self._get_analytics()
         elif path == '/tracks':
             self._get_tracks()
+        elif path == '/routes.json':
+            self._get_routes()
         else:
             super().do_GET()
 
-    def _get_tracks(self):
-        try:
-            with open(TRACKS_FILE, 'r', encoding='utf-8') as f:
-                body = f.read().encode('utf-8')
-        except FileNotFoundError:
-            body = b'[]'
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.end_headers()
-        self.wfile.write(body)
-
-    def _post_tracks(self):
-        try:
-            length  = int(self.headers.get('Content-Length', 0))
-            payload = json.loads(self.rfile.read(length))
-            sid     = payload.get('sessionId', '')
-            new_pts = payload.get('points', [])
-
-            try:
-                with open(TRACKS_FILE, 'r', encoding='utf-8') as f:
-                    tracks = json.load(f)
-                if not isinstance(tracks, list):
-                    tracks = []
-            except (FileNotFoundError, json.JSONDecodeError):
-                tracks = []
-
-            found = next((t for t in tracks if t.get('sessionId') == sid), None)
-            if found:
-                found['points'].extend(new_pts)
-            else:
-                tracks.append({
-                    'sessionId': sid,
-                    'startTime': payload.get('startTime', ''),
-                    'points':    new_pts
-                })
-
-            with open(TRACKS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(tracks, f, ensure_ascii=False, separators=(',', ':'))
-
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(b'{"ok":true}')
-        except Exception as e:
-            self.send_response(400)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-
     def _get_analytics(self):
         try:
-            with open(ANALYTICS_FILE, 'r', encoding='utf-8') as f:
-                body = f.read().encode('utf-8')
-        except FileNotFoundError:
+            rows = self._sb('GET', 'analytics?select=data&order=updated_at.asc')
+            body = json.dumps(
+                [r['data'] for r in rows if isinstance(r.get('data'), dict)],
+                ensure_ascii=False
+            ).encode('utf-8')
+        except Exception as e:
+            print(f'  \033[31m✗  analytics GET: {e}\033[0m')
             body = b'[]'
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
         self.wfile.write(body)
 
-    # ── PUT /spots.json  or  PUT /qr/<id>.png ───────────────
+    def _get_tracks(self):
+        try:
+            rows = self._sb('GET', 'tracks?select=data&order=updated_at.asc')
+            body = json.dumps(
+                [r['data'] for r in rows if isinstance(r.get('data'), dict)],
+                ensure_ascii=False
+            ).encode('utf-8')
+        except Exception as e:
+            print(f'  \033[31m✗  tracks GET: {e}\033[0m')
+            body = b'[]'
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _get_routes(self):
+        try:
+            rows = self._sb('GET', 'pathways?select=*&order=created_at.asc')
+            routes = []
+            for row in rows:
+                r = dict(row.get('points') or {})
+                r['id']   = row['id']
+                r['name'] = row.get('name') or r.get('name', '')
+                routes.append(r)
+            body = json.dumps(routes, ensure_ascii=False).encode('utf-8')
+        except Exception as e:
+            print(f'  \033[31m✗  routes GET: {e}\033[0m')
+            body = b'[]'
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(body)
+
+    # ── PUT /spots.json | /qr/<id>.png | /compiled/<id>.mind ─
     def do_PUT(self):
         if self.path.rstrip('/') == '/' + SPOTS_FILE:
             self._put_spots()
@@ -126,18 +143,14 @@ class Handler(SimpleHTTPRequestHandler):
             length = int(self.headers.get('Content-Length', 0))
             body   = self.rfile.read(length)
             spots  = json.loads(body)
-
             if not isinstance(spots, list):
                 raise ValueError('Payload must be a JSON array')
-
             with open(SPOTS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(spots, f, ensure_ascii=False, indent=2)
-
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({'ok': True, 'count': len(spots)}).encode())
-
         except (json.JSONDecodeError, ValueError) as e:
             self.send_response(400)
             self.send_header('Content-Type', 'application/json')
@@ -176,7 +189,7 @@ class Handler(SimpleHTTPRequestHandler):
             body   = self.rfile.read(length)
             if body[:4] != b'\x89PNG':
                 raise ValueError('Not a valid PNG file')
-            filepath = self.path.lstrip('/')          # e.g. "qr/abc123.png"
+            filepath = self.path.lstrip('/')
             filepath = os.path.normpath(filepath)
             if not filepath.startswith(QR_DIR + os.sep):
                 raise ValueError('Invalid path')
@@ -192,7 +205,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({'error': str(e)}).encode())
 
-    # ── POST /routes.json or /analytics ─────────────────────
+    # ── POST ─────────────────────────────────────────────────
     def do_POST(self):
         path = self.path.rstrip('/')
         if path == '/analytics':
@@ -208,6 +221,91 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(b'{"error":"not found"}')
+
+    def _post_analytics(self):
+        try:
+            length  = int(self.headers.get('Content-Length', 0))
+            payload = json.loads(self.rfile.read(length))
+            sid     = urllib.parse.quote(payload.get('sessionId', ''), safe='')
+
+            existing = self._sb('GET', f'analytics?id=eq.{sid}&select=data')
+            if existing:
+                old = existing[0].get('data') or {}
+                old['events'] = old.get('events', []) + payload.get('events', [])
+                if payload.get('endTime'):
+                    old['endTime'] = payload['endTime']
+                old['lang'] = payload.get('lang', old.get('lang'))
+                self._sb('PATCH', f'analytics?id=eq.{sid}', {'data': old})
+            else:
+                self._sb('POST', 'analytics',
+                         {'id': payload.get('sessionId', ''), 'data': payload},
+                         {'Prefer': 'return=minimal'})
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+        except Exception as e:
+            print(f'  \033[31m✗  analytics POST: {e}\033[0m')
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+
+    def _post_tracks(self):
+        try:
+            length  = int(self.headers.get('Content-Length', 0))
+            payload = json.loads(self.rfile.read(length))
+            sid     = payload.get('sessionId', '')
+            new_pts = payload.get('points', [])
+            sid_q   = urllib.parse.quote(sid, safe='')
+
+            existing = self._sb('GET', f'tracks?id=eq.{sid_q}&select=data')
+            if existing:
+                old = existing[0].get('data') or {}
+                old['points'] = old.get('points', []) + new_pts
+                self._sb('PATCH', f'tracks?id=eq.{sid_q}', {'data': old})
+            else:
+                self._sb('POST', 'tracks',
+                         {'id': sid, 'data': {
+                             'sessionId': sid,
+                             'startTime': payload.get('startTime', ''),
+                             'points':    new_pts
+                         }},
+                         {'Prefer': 'return=minimal'})
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+        except Exception as e:
+            print(f'  \033[31m✗  tracks POST: {e}\033[0m')
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+
+    def _post_route(self):
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+            route  = json.loads(self.rfile.read(length))
+            if not isinstance(route, dict):
+                raise ValueError('Payload must be a JSON object')
+            name = route.get('name', 'Unnamed')
+            rows = self._sb('POST', 'pathways',
+                            {'name': name, 'points': route},
+                            {'Prefer': 'return=representation'})
+            route_id = rows[0]['id'] if rows else secrets.token_hex(6)
+            self.send_response(201)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'ok': True, 'id': route_id}).encode())
+        except Exception as e:
+            print(f'  \033[31m✗  route POST: {e}\033[0m')
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
 
     def _post_analyze(self):
         """POST /api/analyze — vision-based road/direction analysis via Claude."""
@@ -285,98 +383,27 @@ class Handler(SimpleHTTPRequestHandler):
                 result = json.loads(resp.read())
 
             raw = result['content'][0]['text'].strip()
-
-            # JSON を抽出（余分なテキストに対して堅牢に）
             m = re.search(r'\{[^{}]+\}', raw, re.DOTALL)
             parsed = json.loads(m.group() if m else raw)
 
-            # フィールドを検証・サニタイズ
             direction = parsed.get('direction', 'straight')
             if direction not in ('straight', 'left', 'right', 'arrived'):
                 direction = 'straight'
-            confidence  = max(0.0, min(1.0, float(parsed.get('confidence', 0.5))))
+            confidence    = max(0.0, min(1.0, float(parsed.get('confidence', 0.5))))
             road_detected = bool(parsed.get('road_detected', False))
             description   = str(parsed.get('description', ''))[:10]
 
             out = json.dumps({
-                "direction":    direction,
-                "confidence":   round(confidence, 3),
+                "direction":     direction,
+                "confidence":    round(confidence, 3),
                 "road_detected": road_detected,
-                "description":  description
+                "description":   description
             }).encode()
             respond(out)
 
         except Exception as e:
             print(f'  \033[31m✗  /api/analyze error: {e}\033[0m')
-            respond(DEFAULT)   # エラー時は straight をデフォルト返却
-
-    def _post_analytics(self):
-        try:
-            length  = int(self.headers.get('Content-Length', 0))
-            payload = json.loads(self.rfile.read(length))
-            sid     = payload.get('sessionId', '')
-
-            try:
-                with open(ANALYTICS_FILE, 'r', encoding='utf-8') as f:
-                    sessions = json.load(f)
-                if not isinstance(sessions, list):
-                    sessions = []
-            except (FileNotFoundError, json.JSONDecodeError):
-                sessions = []
-
-            found = next((s for s in sessions if s.get('sessionId') == sid), None)
-            if found:
-                found['events'] = found.get('events', []) + payload.get('events', [])
-                if payload.get('endTime'):
-                    found['endTime'] = payload['endTime']
-                found['lang'] = payload.get('lang', found.get('lang'))
-            else:
-                sessions.append(payload)
-
-            with open(ANALYTICS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(sessions, f, ensure_ascii=False, separators=(',', ':'))
-
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(b'{"ok":true}')
-        except Exception as e:
-            self.send_response(400)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-
-    def _post_route(self):
-        try:
-            length = int(self.headers.get('Content-Length', 0))
-            route  = json.loads(self.rfile.read(length))
-            if not isinstance(route, dict):
-                raise ValueError('Payload must be a JSON object')
-            try:
-                with open(ROUTES_FILE, 'r', encoding='utf-8') as f:
-                    routes = json.load(f)
-                if not isinstance(routes, list):
-                    routes = []
-            except (FileNotFoundError, json.JSONDecodeError):
-                routes = []
-            route['id'] = secrets.token_hex(6)
-            routes.append(route)
-            with open(ROUTES_FILE, 'w', encoding='utf-8') as f:
-                json.dump(routes, f, ensure_ascii=False, indent=2)
-            self.send_response(201)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'ok': True, 'id': route['id']}).encode())
-        except (json.JSONDecodeError, ValueError) as e:
-            self.send_response(400)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-        except OSError as e:
-            self.send_response(500)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
+            respond(DEFAULT)
 
     # ── Quiet log: only show writes and errors ───────────────
     def log_message(self, fmt, *args):
@@ -394,11 +421,12 @@ if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     httpd = HTTPServer(('', PORT), Handler)
     print(f'\033[36m⛩  AR Tourism server\033[0m  →  http://localhost:{PORT}')
-    print(f'   AR viewer : http://localhost:{PORT}')
-    print(f'   Admin     : http://localhost:{PORT}/admin.html')
-    print(f'   Routes    : http://localhost:{PORT}/routes.json')
-    print(f'   AR Marker : http://localhost:{PORT}/ar-marker.html?id=SPOT_ID')
-    print(f'   Analytics : http://localhost:{PORT}/analytics')
+    print(f'   AR viewer  : http://localhost:{PORT}')
+    print(f'   Admin      : http://localhost:{PORT}/admin.html')
+    print(f'   Analytics  : http://localhost:{PORT}/analytics  (→ Supabase)')
+    print(f'   Tracks     : http://localhost:{PORT}/tracks     (→ Supabase)')
+    print(f'   Routes     : http://localhost:{PORT}/routes.json (→ Supabase)')
+    print(f'   Supabase   : {SUPABASE_URL}')
     print('   Press Ctrl+C to stop.\n')
     try:
         httpd.serve_forever()

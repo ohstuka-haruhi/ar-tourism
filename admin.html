@@ -631,6 +631,17 @@
 'use strict';
 
 // ─────────────────────────────────────────────────────────
+//  Supabase config  (anon/publishable key — safe for browser)
+// ─────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://pjcbjkjzxzwbxwmrebud.supabase.co';
+const SUPABASE_KEY = 'sb_publishable__yZXAucrH0PmJkCdDYX7dA_gpGyRedn';
+const SB_HEADERS   = {
+  'apikey':        SUPABASE_KEY,
+  'Authorization': `Bearer ${SUPABASE_KEY}`,
+  'Content-Type':  'application/json'
+};
+
+// ─────────────────────────────────────────────────────────
 //  Supported languages
 // ─────────────────────────────────────────────────────────
 const LANGS = [
@@ -1557,9 +1568,13 @@ function initTracksMap() {
 
 async function loadTracks() {
   try {
-    const r = await fetch('/tracks');
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/tracks?select=data&order=updated_at.asc`,
+      { headers: SB_HEADERS }
+    );
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    _tracksData = await r.json();
+    const rows = await r.json();
+    _tracksData = rows.map(row => row.data).filter(Boolean);
   } catch(e) {
     _tracksData = [];
     document.getElementById('tracks-info').textContent = '読み込み失敗: ' + e.message;
@@ -1571,10 +1586,17 @@ async function loadTracks() {
 
 async function loadPathways() {
   try {
-    const r = await fetch('/routes.json');
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/pathways?select=*&order=created_at.asc`,
+      { headers: SB_HEADERS }
+    );
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const all = await r.json();
-    _pathwayData = Array.isArray(all) ? all.filter(e => e.type === 'pathway') : [];
+    const rows = await r.json();
+    _pathwayData = rows.map(row => ({
+      ...(row.points || {}),
+      id:   row.id,
+      name: row.name || (row.points || {}).name || ''
+    }));
   } catch(e) {
     _pathwayData = [];
   }
@@ -1710,10 +1732,14 @@ function fmtDur(secs) {
 
 async function loadAnalytics() {
   try {
-    const r = await fetch('/analytics');
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/analytics?select=data&order=updated_at.asc`,
+      { headers: SB_HEADERS }
+    );
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const data = await r.json();
-    renderAnalytics(Array.isArray(data) ? data : []);
+    const rows = await r.json();
+    const data = rows.map(row => row.data).filter(Boolean);
+    renderAnalytics(data);
     document.getElementById('a-updated').textContent =
       '更新: ' + new Date().toLocaleTimeString('ja-JP');
   } catch(e) {
