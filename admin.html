@@ -14,6 +14,8 @@
   <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <!-- QR code generation (pure-browser, exposes window.qrcode) -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+  <!-- Exifr: EXIF/GPS reader — HEIC対応 -->
+  <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.cjs"></script>
 
   <style>
     :root {
@@ -348,11 +350,104 @@
     .day-label input { display: none; }
     .day-label.checked { background: rgba(229,57,53,0.1); color: var(--danger); border-color: rgba(229,57,53,0.3); font-weight: 600; }
 
-    /* ── Responsive ── */
-    @media (max-width: 600px) {
+    /* ── 写真座標プレビュー ── */
+    #coord-photo-preview {
+      display: none; align-items: center; gap: 10px; margin-top: 8px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 10px;
+    }
+    #coord-photo-thumb {
+      width: 52px; height: 52px; border-radius: 6px;
+      object-fit: cover; flex-shrink: 0; background: #e0e0e0;
+    }
+    #coord-photo-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    #coord-photo-name { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #coord-photo-gps  { font-size: 11px; color: #065f46; font-weight: 600; }
+
+    /* ── バッチ写真インポートモーダル ── */
+    #batch-photo-modal .modal-body {
+      max-width: 600px; max-height: calc(100dvh - 40px);
+      overflow-y: auto; padding: 24px;
+    }
+    #batch-drop-zone {
+      border: 2px dashed var(--border); border-radius: 12px;
+      padding: 28px 20px; text-align: center; margin-bottom: 16px;
+    }
+    #batch-file-label {
+      display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer;
+    }
+    #batch-file-label .b-icon { font-size: 38px; }
+    #batch-file-label .b-text { font-size: 15px; font-weight: 700; color: var(--text); }
+    #batch-file-label .b-hint { font-size: 11px; color: var(--muted); }
+    #batch-file-input { display: none; }
+    #batch-add-more {
+      margin-top: 10px; font-size: 12px; color: var(--accent-dark);
+      background: none; border: none; cursor: pointer; text-decoration: underline;
+    }
+
+    #batch-spot-list {
+      display: flex; flex-direction: column; gap: 10px;
+      max-height: 46vh; overflow-y: auto; margin-bottom: 16px;
+    }
+    .batch-item {
+      display: flex; gap: 10px; align-items: flex-start;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 12px; padding: 10px;
+    }
+    .batch-thumb-wrap {
+      flex-shrink: 0; width: 64px; height: 64px;
+      border-radius: 8px; overflow: hidden; background: #e0e0e0;
+    }
+    .batch-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .batch-fields { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .batch-gps-tag {
+      font-size: 11px; padding: 2px 8px; border-radius: 5px; display: inline-block;
+    }
+    .batch-gps-tag.ok  { background: rgba(16,185,129,0.12); color: #065f46; }
+    .batch-gps-tag.ng  { background: rgba(220,38,38,0.09);  color: #991b1b; }
+    .batch-name-input {
+      width: 100%; padding: 7px 10px;
+      border: 1px solid var(--border); border-radius: 7px;
+      font-size: 13px; background: var(--card); color: var(--text); font-family: inherit;
+    }
+    .batch-name-input:focus { outline: none; border-color: var(--accent); }
+    .batch-cat-select {
+      width: 100%; padding: 6px 8px;
+      border: 1px solid var(--border); border-radius: 7px;
+      font-size: 12px; background: var(--card); color: var(--text);
+    }
+    .batch-remove-btn {
+      flex-shrink: 0; background: none; border: none;
+      color: var(--muted); cursor: pointer; font-size: 16px; padding: 2px 4px; line-height: 1;
+    }
+
+    /* ── スマホ対応 ── */
+    .header-desktop-only { display: flex; gap: 8px; }
+    @media (max-width: 640px) {
+      .header-desktop-only { display: none; }
+      header { padding: 0 14px; }
+      main { padding: 16px 12px 80px; }
+      #tab-nav { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      #tab-nav::-webkit-scrollbar { display: none; }
+      #coord-map { height: 160px; }
       .form-grid { grid-template-columns: 1fr; }
       .form-grid .full { grid-column: 1; }
-      #coord-map { height: 180px; }
+      #form-modal .modal-body {
+        border-radius: 18px 18px 0 0; padding: 20px 14px 32px;
+      }
+      .modal-backdrop { padding: 0; align-items: flex-end; }
+      #batch-photo-modal .modal-body {
+        border-radius: 18px 18px 0 0; padding: 20px 14px 32px;
+        max-height: 92dvh;
+      }
+      #batch-spot-list { max-height: 52vh; }
+      td { padding: 8px 10px; }
+      .section-header { flex-wrap: wrap; gap: 8px; }
+    }
+    /* PCでは既存スタイルを維持 */
+    @media (min-width: 601px) {
+      .form-grid { grid-template-columns: 1fr 1fr; }
+      .form-grid .full { grid-column: 1 / -1; }
     }
   </style>
 </head>
@@ -361,8 +456,10 @@
 <header>
   <div class="logo">⛩ AR Admin</div>
   <div class="header-actions">
-    <button class="btn btn-secondary btn-sm" onclick="exportJSON()">⬇ Export JSON</button>
-    <button class="btn btn-secondary btn-sm" onclick="importJSON()">⬆ Import JSON</button>
+    <div class="header-desktop-only">
+      <button class="btn btn-secondary btn-sm" onclick="exportJSON()">⬇ Export</button>
+      <button class="btn btn-secondary btn-sm" onclick="importJSON()">⬆ Import</button>
+    </div>
     <a href="index.html" class="btn btn-primary btn-sm">▶ View AR</a>
   </div>
 </header>
@@ -382,8 +479,9 @@
         <h2>Spots</h2>
         <span class="badge" id="spot-count">0</span>
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-secondary" onclick="toggleRouteMode()" id="route-mode-btn">🗺️ 順路設定</button>
+        <button class="btn btn-secondary" onclick="openBatchPhotoImport()">📷 写真から一括追加</button>
         <button class="btn btn-primary" onclick="openAddForm()">＋ Add Spot</button>
       </div>
     </div>
@@ -523,11 +621,22 @@
             <input type="number" id="f-lat" placeholder="Latitude" step="any" required>
             <input type="number" id="f-lng" placeholder="Longitude" step="any" required>
             <button type="button" class="btn btn-secondary btn-sm get-loc-btn" onclick="useCurrentLocation()">
-              ⌖ My Location
+              ⌖ 現在地
             </button>
+            <button type="button" class="btn btn-secondary btn-sm get-loc-btn" onclick="document.getElementById('photo-coord-input').click()">
+              📷 写真
+            </button>
+            <input type="file" id="photo-coord-input" accept="image/*,.heic,.heif" style="display:none" onchange="readPhotoForCoords(this)">
+          </div>
+          <div id="coord-photo-preview">
+            <img id="coord-photo-thumb" alt="">
+            <div id="coord-photo-info">
+              <span id="coord-photo-name"></span>
+              <span id="coord-photo-gps"></span>
+            </div>
           </div>
           <div id="coord-map"></div>
-          <p class="map-hint">Click the map to set coordinates, or enter manually above.</p>
+          <p class="map-hint">写真をタップして座標を自動入力、またはマップをタップ・手動入力</p>
         </div>
 
         <!-- Descriptions -->
@@ -570,6 +679,35 @@
         <button type="submit" class="btn btn-success" id="save-btn">Save Spot</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ── Batch Photo Import Modal ── -->
+<div class="modal-backdrop" id="batch-photo-modal" onclick="if(event.target.id==='batch-photo-modal')closeBatchModal()">
+  <div class="modal-body">
+    <div class="modal-title">
+      <span>📷 写真から一括追加</span>
+      <button class="modal-close-btn" onclick="closeBatchModal()">✕</button>
+    </div>
+
+    <div id="batch-drop-zone">
+      <input type="file" id="batch-file-input" accept="image/*,.heic,.heif" multiple
+             onchange="handleBatchFiles(this)">
+      <label id="batch-file-label" for="batch-file-input">
+        <span class="b-icon">📷</span>
+        <span class="b-text">写真を選択（複数可）</span>
+        <span class="b-hint">カメラロールから選べます・HEIC/JPEG対応</span>
+      </label>
+    </div>
+
+    <div id="batch-spot-list"></div>
+
+    <div class="form-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeBatchModal()">キャンセル</button>
+      <button type="button" class="btn btn-success" id="batch-save-btn" onclick="saveBatchSpots()" disabled>
+        まとめて保存（<span id="batch-count">0</span>件）
+      </button>
+    </div>
   </div>
 </div>
 
@@ -919,6 +1057,167 @@ function useCurrentLocation() {
     document.getElementById('f-lng').value = pos.coords.longitude.toFixed(7);
     placeMapMarker(pos.coords.latitude, pos.coords.longitude);
   }, () => showToast('Could not get location'));
+}
+
+// ─────────────────────────────────────────────────────────
+//  写真 Exif GPS 読み込み
+// ─────────────────────────────────────────────────────────
+async function readPhotoGPS(file) {
+  if (!window.exifr) return null;
+  try {
+    const gps = await window.exifr.gps(file);
+    return (gps && gps.latitude != null) ? gps : null;
+  } catch { return null; }
+}
+
+// 単票フォームの「📷 写真」ボタン
+async function readPhotoForCoords(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+
+  // サムネイル表示
+  const preview = document.getElementById('coord-photo-preview');
+  const thumb   = document.getElementById('coord-photo-thumb');
+  const nameEl  = document.getElementById('coord-photo-name');
+  const gpsEl   = document.getElementById('coord-photo-gps');
+  thumb.src  = URL.createObjectURL(file);
+  nameEl.textContent = file.name;
+  preview.style.display = 'flex';
+
+  // GPS読み込み
+  const gps = await readPhotoGPS(file);
+  if (gps) {
+    document.getElementById('f-lat').value = gps.latitude.toFixed(7);
+    document.getElementById('f-lng').value = gps.longitude.toFixed(7);
+    gpsEl.textContent = `📍 ${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`;
+    syncMapFromForm();
+    showToast('📍 写真から座標を取得しました');
+  } else {
+    gpsEl.textContent = '⚠ 位置情報が見つかりません';
+    gpsEl.style.color = 'var(--danger)';
+    showToast('⚠ この写真に位置情報がありません');
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  バッチ写真インポート
+// ─────────────────────────────────────────────────────────
+let _batchItems = [];
+
+function openBatchPhotoImport() {
+  _batchItems = [];
+  document.getElementById('batch-spot-list').innerHTML = '';
+  document.getElementById('batch-count').textContent   = '0';
+  document.getElementById('batch-save-btn').disabled   = true;
+  document.getElementById('batch-file-input').value    = '';
+  document.getElementById('batch-photo-modal').classList.add('open');
+}
+
+function closeBatchModal() {
+  _batchItems.forEach(item => { if (item.thumbUrl) URL.revokeObjectURL(item.thumbUrl); });
+  _batchItems = [];
+  document.getElementById('batch-photo-modal').classList.remove('open');
+}
+
+async function handleBatchFiles(input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  input.value = '';
+
+  document.getElementById('batch-spot-list').innerHTML =
+    '<div style="text-align:center;padding:24px;color:var(--muted)">📷 読み込み中…</div>';
+
+  const newItems = await Promise.all(files.map(async file => {
+    const gps      = await readPhotoGPS(file);
+    const thumbUrl = URL.createObjectURL(file);
+    return { file, gps, thumbUrl, name: '', category: 'heritage' };
+  }));
+
+  _batchItems.push(...newItems);
+  renderBatchList();
+}
+
+function renderBatchList() {
+  const list = document.getElementById('batch-spot-list');
+  if (!_batchItems.length) { list.innerHTML = ''; updateBatchSaveBtn(); return; }
+
+  list.innerHTML = _batchItems.map((item, i) => `
+    <div class="batch-item">
+      <div class="batch-thumb-wrap">
+        <img class="batch-thumb" src="${item.thumbUrl}" onerror="this.style.visibility='hidden'">
+      </div>
+      <div class="batch-fields">
+        <span class="batch-gps-tag ${item.gps ? 'ok' : 'ng'}">
+          ${item.gps
+            ? `📍 ${item.gps.latitude.toFixed(5)}, ${item.gps.longitude.toFixed(5)}`
+            : '⚠ 位置情報なし（スキップ）'}
+        </span>
+        <input class="batch-name-input" placeholder="スポット名（必須）"
+               value="${esc(item.name)}"
+               oninput="_batchItems[${i}].name=this.value; updateBatchSaveBtn()">
+        <select class="batch-cat-select" onchange="_batchItems[${i}].category=this.value">
+          <option value="heritage" ${item.category==='heritage'?'selected':''}>🏯 歴史文化</option>
+          <option value="nature"   ${item.category==='nature'  ?'selected':''}>🌿 自然景観</option>
+          <option value="facility" ${item.category==='facility'?'selected':''}>🚌 公共施設</option>
+          <option value="shop"     ${item.category==='shop'    ?'selected':''}>🛍️ お店</option>
+        </select>
+      </div>
+      <button class="batch-remove-btn" onclick="removeBatchItem(${i})">✕</button>
+    </div>
+  `).join('');
+
+  updateBatchSaveBtn();
+}
+
+function updateBatchSaveBtn() {
+  const valid = _batchItems.filter(it => it.gps && it.name.trim()).length;
+  document.getElementById('batch-count').textContent = valid;
+  document.getElementById('batch-save-btn').disabled = valid === 0;
+}
+
+function removeBatchItem(idx) {
+  const removed = _batchItems.splice(idx, 1)[0];
+  if (removed?.thumbUrl) URL.revokeObjectURL(removed.thumbUrl);
+  renderBatchList();
+}
+
+async function saveBatchSpots() {
+  const valid = _batchItems.filter(it => it.gps && it.name.trim());
+  if (!valid.length) return;
+
+  const saveBtn = document.getElementById('batch-save-btn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = '保存中…';
+
+  const newSpots = valid.map(item => {
+    const nameVal = item.name.trim();
+    const emptyLangs = LANGS.reduce((o, l) => { o[l.code] = ''; return o; }, {});
+    return {
+      id:          genId(),
+      category:    item.category,
+      lat:         item.gps.latitude,
+      lng:         item.gps.longitude,
+      radius:      50,
+      name:        { ...emptyLangs, jp: nameVal, en: nameVal },
+      description: { ...emptyLangs },
+      address:     { ...emptyLangs },
+      hours:       { open: '09:00', close: '17:00', closed_days: [] }
+    };
+  });
+
+  spots.push(...newSpots);
+  try {
+    await saveSpots();
+    showToast(`✅ ${newSpots.length}件のスポットを追加しました`);
+    renderTable();
+    closeBatchModal();
+  } catch(e) {
+    newSpots.forEach(() => spots.pop());
+    showToast('保存失敗: ' + e.message);
+    saveBtn.disabled = false;
+    saveBtn.textContent = `まとめて保存（${valid.length}件）`;
+  }
 }
 
 // ─────────────────────────────────────────────────────────
