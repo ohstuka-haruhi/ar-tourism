@@ -23,7 +23,10 @@ ROUTES_FILE  = 'routes.json'
 QR_DIR       = 'qr'
 COMPILED_DIR = 'compiled'
 
-SUPABASE_URL = 'https://pjcbjkjzxzwbxwmrebud.supabase.co'
+SUPABASE_URL = os.environ.get(
+    'SUPABASE_URL',
+    'https://pjcbjkjzxzwbxwmrebud.supabase.co'
+)
 SUPABASE_KEY = os.environ.get(
     'SUPABASE_KEY',
     'sb_publishable__yZXAucrH0PmJkCdDYX7dA_gpGyRedn'
@@ -226,19 +229,20 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             length  = int(self.headers.get('Content-Length', 0))
             payload = json.loads(self.rfile.read(length))
-            sid     = urllib.parse.quote(payload.get('sessionId', ''), safe='')
+            sid      = payload.get('sessionId', '')
+            sid_safe = urllib.parse.quote(sid, safe='-_.')
 
-            existing = self._sb('GET', f'analytics?id=eq.{sid}&select=data')
+            existing = self._sb('GET', f'analytics?id=eq.{sid_safe}&select=data')
             if existing:
                 old = existing[0].get('data') or {}
                 old['events'] = old.get('events', []) + payload.get('events', [])
                 if payload.get('endTime'):
                     old['endTime'] = payload['endTime']
                 old['lang'] = payload.get('lang', old.get('lang'))
-                self._sb('PATCH', f'analytics?id=eq.{sid}', {'data': old})
+                self._sb('PATCH', f'analytics?id=eq.{sid_safe}', {'data': old})
             else:
                 self._sb('POST', 'analytics',
-                         {'id': payload.get('sessionId', ''), 'data': payload},
+                         {'id': sid, 'data': payload},
                          {'Prefer': 'return=minimal'})
 
             self.send_response(200)
@@ -258,7 +262,7 @@ class Handler(SimpleHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length))
             sid     = payload.get('sessionId', '')
             new_pts = payload.get('points', [])
-            sid_q   = urllib.parse.quote(sid, safe='')
+            sid_q   = urllib.parse.quote(sid, safe='-_.')
 
             existing = self._sb('GET', f'tracks?id=eq.{sid_q}&select=data')
             if existing:
