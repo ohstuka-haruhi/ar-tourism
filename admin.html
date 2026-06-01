@@ -95,6 +95,7 @@
     .cat-badge.nature   { background: rgba(16,185,129,0.12);  color: #047857; }
     .cat-badge.facility { background: rgba(59,130,246,0.12);  color: #1d4ed8; }
     .cat-badge.shop     { background: rgba(236,72,153,0.12);  color: #be185d; }
+    .cat-badge.signage  { background: rgba(245,158,11,0.12);  color: #b45309; }
     .coord { font-family: monospace; font-size: 12px; color: var(--muted); }
     .actions-cell { white-space: nowrap; }
     .empty-row td { text-align: center; padding: 40px; color: var(--muted); }
@@ -284,6 +285,15 @@
       font-size: 11px; color: var(--muted); text-align: center;
     }
 
+    /* ── Sort ordering ── */
+    #sort-toolbar {
+      display: none; align-items: center; gap: 10px; flex-wrap: wrap;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 10px 14px; margin-bottom: 14px;
+    }
+    #sort-toolbar.show { display: flex; }
+    #sort-info { font-size: 12px; color: var(--muted); flex: 1; }
+
     /* ── Route ordering ── */
     #route-toolbar {
       display: none; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -305,6 +315,22 @@
     tr.drag-over-bottom { box-shadow: 0  2px 0 var(--accent); }
     tr.dragging { opacity: 0.35; }
     .route-col { width: 90px; text-align: center; }
+
+    /* ── Spots overview map ── */
+    #spots-overview-map {
+      height: 65vh; min-height: 280px;
+      border-radius: 0 0 14px 14px; overflow: hidden;
+    }
+
+    /* ── Spot thumbnail ── */
+    #edit-spot-thumbnail {
+      display: none; margin-bottom: 14px; text-align: center;
+    }
+    #edit-thumb-img {
+      max-height: 120px; max-width: 100%; border-radius: 10px;
+      object-fit: cover; box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+    }
+    #edit-thumb-label { font-size: 11px; color: var(--muted); margin-top: 5px; }
 
     /* ── Tracks map tab ── */
     #tracks-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -491,10 +517,18 @@
         <span class="badge" id="spot-count">0</span>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary" onclick="toggleSortMode()" id="sort-mode-btn">⇅ 並び替え</button>
         <button class="btn btn-secondary" onclick="toggleRouteMode()" id="route-mode-btn">🗺️ 順路設定</button>
+        <button class="btn btn-secondary" onclick="openSpotsMap()">🗺️ 地図で確認</button>
         <button class="btn btn-secondary" onclick="openBatchPhotoImport()">📷 写真から一括追加</button>
         <button class="btn btn-primary" onclick="openAddForm()">＋ Add Spot</button>
       </div>
+    </div>
+    <!-- Sort toolbar (visible in sort mode) -->
+    <div id="sort-toolbar">
+      <span id="sort-info">☰ ドラッグして順番を変更できます</span>
+      <button class="btn btn-success btn-sm" onclick="saveSortOrder()">💾 並び順を保存</button>
+      <button class="btn btn-secondary btn-sm" onclick="toggleSortMode()">✕ 終了</button>
     </div>
     <!-- Route toolbar (visible in route mode) -->
     <div id="route-toolbar">
@@ -602,6 +636,11 @@
     <form id="spot-form" onsubmit="handleFormSubmit(event)">
       <input type="hidden" id="f-id">
 
+      <div id="edit-spot-thumbnail">
+        <img id="edit-thumb-img" alt="登録時の写真">
+        <div id="edit-thumb-label">📷 スポット登録時の写真</div>
+      </div>
+
       <div class="form-grid">
         <!-- Name per language -->
         <div class="field full">
@@ -618,6 +657,7 @@
             <option value="nature">🌿 自然景観</option>
             <option value="facility">🚌 公共施設</option>
             <option value="shop">🛍️ お店</option>
+            <option value="signage">🪧 案内・看板・注意</option>
           </select>
         </div>
         <div class="field">
@@ -724,6 +764,17 @@
         まとめて保存（<span id="batch-count">0</span>件）
       </button>
     </div>
+  </div>
+</div>
+
+<!-- ── Spots Overview Map Modal ── -->
+<div class="modal-backdrop" id="spots-map-modal" onclick="if(event.target.id==='spots-map-modal')closeSpotsMap()">
+  <div class="modal-body" style="max-width:900px;width:100%;padding:0;border-radius:14px;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--card);border-bottom:1px solid var(--border)">
+      <span style="font-size:16px;font-weight:700">📍 スポット一覧マップ（<span id="spots-map-count">0</span>件）</span>
+      <button class="modal-close-btn" onclick="closeSpotsMap()">✕</button>
+    </div>
+    <div id="spots-overview-map"></div>
   </div>
 </div>
 
@@ -880,10 +931,31 @@ function genId() {
 // ─────────────────────────────────────────────────────────
 //  Table render
 // ─────────────────────────────────────────────────────────
-const CAT_COLORS = { heritage:'heritage', nature:'nature', facility:'facility', shop:'shop' };
+const CAT_COLORS = { heritage:'heritage', nature:'nature', facility:'facility', shop:'shop', signage:'signage' };
 
 const ROUTE_NUMS = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
 let routeMode = false;
+let sortMode  = false;
+
+function toggleSortMode() {
+  sortMode = !sortMode;
+  document.getElementById('sort-toolbar').classList.toggle('show', sortMode);
+  document.getElementById('sort-mode-btn').textContent = sortMode ? '✕ 並び替え終了' : '⇅ 並び替え';
+  renderTable();
+}
+
+async function saveSortOrder() {
+  const btn = document.querySelector('#sort-toolbar .btn-success');
+  btn.disabled = true; btn.textContent = '保存中…';
+  try {
+    await saveSpots();
+    showToast('並び順を保存しました ✓');
+  } catch(e) {
+    showToast('保存失敗: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 並び順を保存';
+  }
+}
 
 function renderTable() {
   document.getElementById('spot-count').textContent = spots.length;
@@ -912,11 +984,10 @@ function renderTable() {
       : '';
 
     return `
-    <tr data-id="${s.id}" draggable="${routeMode}">
-      <td class="route-col" style="display:${routeMode ? '' : 'none'}">
+    <tr data-id="${s.id}" draggable="${routeMode || sortMode}">
+      <td class="route-col" style="display:${(routeMode || sortMode) ? '' : 'none'}">
         <span class="drag-handle">☰</span>
-        <input type="checkbox" class="route-check" data-id="${s.id}" ${inRoute ? 'checked' : ''}>
-        ${badge}
+        ${routeMode ? `<input type="checkbox" class="route-check" data-id="${s.id}" ${inRoute ? 'checked' : ''}>${badge}` : ''}
       </td>
       <td class="name-cell"><span class="ellipsis" style="max-width:160px">${esc(name)}</span></td>
       <td><span class="cat-badge ${CAT_COLORS[cat] || ''}">${esc(cat)}</span></td>
@@ -977,7 +1048,7 @@ function initRouteEvents() {
 
   tbody.addEventListener('dragstart', e => {
     const tr = e.target.closest('tr[data-id]');
-    if (!tr || !routeMode) return;
+    if (!tr || (!routeMode && !sortMode)) return;
     dragSrcId = tr.dataset.id;
     tr.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
@@ -1065,6 +1136,58 @@ function syncMapFromForm() {
 
 document.getElementById('f-lat').addEventListener('change', syncMapFromForm);
 document.getElementById('f-lng').addEventListener('change', syncMapFromForm);
+
+// ─────────────────────────────────────────────────────────
+//  Spots overview map
+// ─────────────────────────────────────────────────────────
+let _spotsMap = null;
+
+const SPOT_CAT_COLOR = {
+  heritage:'#d97706', nature:'#10b981', facility:'#3b82f6',
+  shop:'#ec4899', signage:'#f59e0b', default:'#6b7280'
+};
+const SPOT_CAT_ICON = {
+  heritage:'🏯', nature:'🌿', facility:'🚌', shop:'🛍️', signage:'🪧', default:'📍'
+};
+
+function openSpotsMap() {
+  document.getElementById('spots-map-count').textContent = spots.length;
+  document.getElementById('spots-map-modal').classList.add('open');
+  requestAnimationFrame(() => {
+    if (_spotsMap) { _spotsMap.remove(); _spotsMap = null; }
+    _spotsMap = L.map('spots-overview-map').setView([38.5, 140.4], 10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap', maxZoom: 18
+    }).addTo(_spotsMap);
+
+    const bounds = [];
+    spots.forEach(s => {
+      const color = SPOT_CAT_COLOR[s.category] || SPOT_CAT_COLOR.default;
+      const icon  = SPOT_CAT_ICON[s.category]  || SPOT_CAT_ICON.default;
+      const name  = (s.name || {}).jp || (s.name || {}).en || s.id;
+      const marker = L.marker([s.lat, s.lng], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="width:28px;height:28px;border-radius:50%;background:${color};
+                 border:2px solid #fff;display:flex;align-items:center;justify-content:center;
+                 font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${icon}</div>`,
+          iconSize: [28, 28], iconAnchor: [14, 14]
+        })
+      });
+      marker.bindPopup(`<b>${esc(name)}</b><br><small>${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}</small>`);
+      marker.addTo(_spotsMap);
+      bounds.push([s.lat, s.lng]);
+    });
+
+    if (bounds.length) _spotsMap.fitBounds(bounds, { padding: [24, 24] });
+    setTimeout(() => _spotsMap.invalidateSize(), 120);
+  });
+}
+
+function closeSpotsMap() {
+  document.getElementById('spots-map-modal').classList.remove('open');
+  if (_spotsMap) { _spotsMap.remove(); _spotsMap = null; }
+}
 
 function useCurrentLocation() {
   if (!navigator.geolocation) { showToast('Geolocation not available'); return; }
@@ -1220,17 +1343,29 @@ async function readPhotoForCoords(input) {
 let _batchItems = [];
 
 function openBatchPhotoImport() {
+  // ファイル入力を新しい要素で置換（2回目以降のchangeイベント不発火を防ぐ）
+  const oldInput = document.getElementById('batch-file-input');
+  if (oldInput) {
+    const newInput = oldInput.cloneNode(true);
+    oldInput.replaceWith(newInput);
+    newInput.addEventListener('change', () => handleBatchFiles(newInput));
+  }
+
   _batchItems = [];
   document.getElementById('batch-spot-list').innerHTML = '';
+  document.getElementById('batch-ios-note').style.display = 'none';
   document.getElementById('batch-count').textContent   = '0';
-  document.getElementById('batch-save-btn').disabled   = true;
-  document.getElementById('batch-file-input').value    = '';
+  const saveBtn = document.getElementById('batch-save-btn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'まとめて保存';
   document.getElementById('batch-photo-modal').classList.add('open');
 }
 
 function closeBatchModal() {
   _batchItems.forEach(item => { if (item.thumbUrl) URL.revokeObjectURL(item.thumbUrl); });
   _batchItems = [];
+  const saveBtn = document.getElementById('batch-save-btn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = 'まとめて保存（<span id="batch-count">0</span>件）'; }
   document.getElementById('batch-photo-modal').classList.remove('open');
 }
 
@@ -1282,6 +1417,7 @@ function renderBatchList() {
           <option value="nature"   ${item.category==='nature'  ?'selected':''}>🌿 自然景観</option>
           <option value="facility" ${item.category==='facility'?'selected':''}>🚌 公共施設</option>
           <option value="shop"     ${item.category==='shop'    ?'selected':''}>🛍️ お店</option>
+          <option value="signage"  ${item.category==='signage' ?'selected':''}>🪧 案内・看板・注意</option>
         </select>
       </div>
       <button class="batch-remove-btn" onclick="removeBatchItem(${i})">✕</button>
@@ -1312,15 +1448,37 @@ function batchOpenMapPicker(idx) {
 }
 
 function updateBatchSaveBtn() {
-  const valid = _batchItems.filter(it => it.gps && it.name.trim()).length;
-  document.getElementById('batch-count').textContent = valid;
-  document.getElementById('batch-save-btn').disabled = valid === 0;
+  const valid   = _batchItems.filter(it => it.gps && it.name.trim()).length;
+  const countEl = document.getElementById('batch-count');
+  if (countEl) countEl.textContent = valid;
+  const saveBtn = document.getElementById('batch-save-btn');
+  if (saveBtn) saveBtn.disabled = valid === 0;
 }
 
 function removeBatchItem(idx) {
   const removed = _batchItems.splice(idx, 1)[0];
   if (removed?.thumbUrl) URL.revokeObjectURL(removed.thumbUrl);
   renderBatchList();
+}
+
+async function _createThumbnail(file, size = 200) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const s = Math.min(img.width, img.height);
+        ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/jpeg', 0.55));
+      } catch { URL.revokeObjectURL(url); resolve(null); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
 }
 
 async function saveBatchSpots() {
@@ -1331,10 +1489,11 @@ async function saveBatchSpots() {
   saveBtn.disabled = true;
   saveBtn.textContent = '保存中…';
 
-  const newSpots = valid.map(item => {
-    const nameVal = item.name.trim();
+  const newSpots = await Promise.all(valid.map(async item => {
+    const nameVal    = item.name.trim();
     const emptyLangs = LANGS.reduce((o, l) => { o[l.code] = ''; return o; }, {});
-    return {
+    const thumbnail  = await _createThumbnail(item.file);
+    const s = {
       id:          genId(),
       category:    item.category,
       lat:         item.gps.latitude,
@@ -1345,7 +1504,9 @@ async function saveBatchSpots() {
       address:     { ...emptyLangs },
       hours:       { open: '09:00', close: '17:00', closed_days: [] }
     };
-  });
+    if (thumbnail) s.thumbnail = thumbnail;
+    return s;
+  }));
 
   spots.push(...newSpots);
   try {
@@ -1357,7 +1518,7 @@ async function saveBatchSpots() {
     newSpots.forEach(() => spots.pop());
     showToast('保存失敗: ' + e.message);
     saveBtn.disabled = false;
-    saveBtn.textContent = `まとめて保存（${valid.length}件）`;
+    saveBtn.innerHTML = `まとめて保存（<span id="batch-count">${valid.length}</span>件）`;
   }
 }
 
@@ -1379,6 +1540,7 @@ function openAddForm() {
       if (el) el.value = '';
     });
   });
+  document.getElementById('edit-spot-thumbnail').style.display = 'none';
   switchNameTab('jp');
   switchDescTab('jp');
   switchAddrTab('jp');
@@ -1415,6 +1577,14 @@ function openEditForm(id) {
   document.getElementById('f-hours-open').value  = (spot.hours || {}).open  || '09:00';
   document.getElementById('f-hours-close').value = (spot.hours || {}).close || '17:00';
   setClosedDays((spot.hours || {}).closed_days || []);
+  const thumbWrap = document.getElementById('edit-spot-thumbnail');
+  const thumbImg  = document.getElementById('edit-thumb-img');
+  if (spot.thumbnail) {
+    thumbImg.src = spot.thumbnail;
+    thumbWrap.style.display = 'block';
+  } else {
+    thumbWrap.style.display = 'none';
+  }
   switchNameTab('jp');
   switchDescTab('jp');
   switchAddrTab('jp');

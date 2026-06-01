@@ -768,7 +768,7 @@ const I18N = {
     tryAR:        'Try AR Again',
     closeList:    'Close List',
     fallbackMsg:  reason => `${reason} — AR overlay unavailable. You can still browse spots below.`,
-    cat: { heritage:'Heritage', nature:'Nature', facility:'Facility', shop:'Shop', default:'Spot' }
+    cat: { heritage:'Heritage', nature:'Nature', facility:'Facility', shop:'Shop', signage:'Sign/Info', default:'Spot' }
   },
   jp: {
     nearby:       '近くのスポット',
@@ -785,7 +785,7 @@ const I18N = {
     tryAR:        'ARを再試行',
     closeList:    'リストを閉じる',
     fallbackMsg:  reason => `${reason} — ARオーバーレイを表示できません。以下でスポットを閲覧できます。`,
-    cat: { heritage:'歴史文化', nature:'自然景観', facility:'公共施設', shop:'お店', default:'スポット' }
+    cat: { heritage:'歴史文化', nature:'自然景観', facility:'公共施設', shop:'お店', signage:'案内・看板', default:'スポット' }
   },
   zh: {
     nearby:       '附近景点',
@@ -802,7 +802,7 @@ const I18N = {
     tryAR:        '重试AR',
     closeList:    '关闭列表',
     fallbackMsg:  reason => `${reason} — AR叠加层不可用。您仍可在下方浏览景点。`,
-    cat: { heritage:'文化遗产', nature:'自然景观', facility:'公共设施', shop:'商店', default:'景点' }
+    cat: { heritage:'文化遗产', nature:'自然景观', facility:'公共设施', shop:'商店', signage:'指示牌', default:'景点' }
   },
   hi: {
     nearby: 'पास के स्थान', away: 'दूर',
@@ -812,7 +812,7 @@ const I18N = {
     camDenied: 'कैमरा अनुमति नहीं', noCamera: 'कैमरा उपलब्ध नहीं',
     listView: 'सभी स्थान देखें:', tryAR: 'AR फिर आज़माएं', closeList: 'सूची बंद करें',
     fallbackMsg: r => `${r} — AR उपलब्ध नहीं। नीचे स्थान देखें।`,
-    cat: { heritage:'ऐतिहासिक', nature:'प्रकृति', facility:'सुविधा', shop:'दुकान', default:'स्थान' }
+    cat: { heritage:'ऐतिहासिक', nature:'प्रकृति', facility:'सुविधा', shop:'दुकान', signage:'साइन', default:'स्थान' }
   },
   es: {
     nearby: 'Lugares cercanos', away: 'de distancia',
@@ -822,7 +822,7 @@ const I18N = {
     camDenied: 'Permiso de cámara denegado', noCamera: 'Cámara no disponible',
     listView: 'Ver todos los lugares:', tryAR: 'Reintentar AR', closeList: 'Cerrar lista',
     fallbackMsg: r => `${r} — AR no disponible. Explore los lugares abajo.`,
-    cat: { heritage:'Patrimonio', nature:'Naturaleza', facility:'Instalación', shop:'Tienda', default:'Lugar' }
+    cat: { heritage:'Patrimonio', nature:'Naturaleza', facility:'Instalación', shop:'Tienda', signage:'Señal', default:'Lugar' }
   },
   fr: {
     nearby: 'Lieux à proximité', away: 'de distance',
@@ -832,7 +832,7 @@ const I18N = {
     camDenied: 'Permission caméra refusée', noCamera: 'Caméra indisponible',
     listView: 'Voir tous les lieux:', tryAR: 'Réessayer AR', closeList: 'Fermer la liste',
     fallbackMsg: r => `${r} — AR indisponible. Parcourez les lieux ci-dessous.`,
-    cat: { heritage:'Patrimoine', nature:'Nature', facility:'Équipement', shop:'Boutique', default:'Lieu' }
+    cat: { heritage:'Patrimoine', nature:'Nature', facility:'Équipement', shop:'Boutique', signage:'Panneau', default:'Lieu' }
   },
   ar: {
     nearby: 'الأماكن القريبة', away: 'على بعد',
@@ -842,7 +842,7 @@ const I18N = {
     camDenied: 'تم رفض إذن الكاميرا', noCamera: 'الكاميرا غير متاحة',
     listView: 'تصفح جميع الأماكن:', tryAR: 'إعادة محاولة AR', closeList: 'إغلاق القائمة',
     fallbackMsg: r => `${r} — AR غير متاح. يمكنك تصفح الأماكن أدناه.`,
-    cat: { heritage:'تراث', nature:'طبيعة', facility:'مرفق', shop:'متجر', default:'مكان' }
+    cat: { heritage:'تراث', nature:'طبيعة', facility:'مرفق', shop:'متجر', signage:'لافتة', default:'مكان' }
   },
   bn: {
     nearby: 'কাছের স্থান', away: 'দূরে',
@@ -852,7 +852,7 @@ const I18N = {
     camDenied: 'ক্যামেরার অনুমতি প্রত্যাখ্যাত', noCamera: 'ক্যামেরা পাওয়া যাচ্ছে না',
     listView: 'সকল স্থান দেখুন:', tryAR: 'AR আবার চেষ্টা করুন', closeList: 'তালিকা বন্ধ করুন',
     fallbackMsg: r => `${r} — AR পাওয়া যাচ্ছে না। নিচে স্থানগুলি দেখুন।`,
-    cat: { heritage:'ঐতিহ্য', nature:'প্রকৃতি', facility:'সুবিধা', shop:'দোকান', default:'স্থান' }
+    cat: { heritage:'ঐতিহ্য', nature:'প্রকৃতি', facility:'সুবিধা', shop:'দোকান', signage:'সাইন', default:'স্থান' }
   },
   pt: {
     nearby: 'Locais próximos', away: 'de distância',
@@ -862,7 +862,7 @@ const I18N = {
     camDenied: 'Permissão de câmera negada', noCamera: 'Câmera indisponível',
     listView: 'Ver todos os locais:', tryAR: 'Tentar AR novamente', closeList: 'Fechar lista',
     fallbackMsg: r => `${r} — AR indisponível. Explore os locais abaixo.`,
-    cat: { heritage:'Patrimônio', nature:'Natureza', facility:'Instalação', shop:'Loja', default:'Local' }
+    cat: { heritage:'Patrimônio', nature:'Natureza', facility:'Instalação', shop:'Loja', signage:'Placa', default:'Local' }
   },
   ru: {
     nearby: 'Ближайшие места', away: 'расстояние',
@@ -872,7 +872,7 @@ const I18N = {
     camDenied: 'Доступ к камере запрещён', noCamera: 'Камера недоступна',
     listView: 'Все места:', tryAR: 'Повторить AR', closeList: 'Закрыть список',
     fallbackMsg: r => `${r} — AR недоступен. Места можно просмотреть ниже.`,
-    cat: { heritage:'Наследие', nature:'Природа', facility:'Объект', shop:'Магазин', default:'Место' }
+    cat: { heritage:'Наследие', nature:'Природа', facility:'Объект', shop:'Магазин', signage:'Знак', default:'Место' }
   },
   ur: {
     nearby: 'قریبی مقامات', away: 'دور',
@@ -882,7 +882,7 @@ const I18N = {
     camDenied: 'کیمرہ کی اجازت نہیں', noCamera: 'کیمرہ دستیاب نہیں',
     listView: 'تمام مقامات دیکھیں:', tryAR: 'AR دوبارہ آزمائیں', closeList: 'فہرست بند کریں',
     fallbackMsg: r => `${r} — AR دستیاب نہیں۔ نیچے مقامات دیکھیں۔`,
-    cat: { heritage:'ورثہ', nature:'فطرت', facility:'سہولت', shop:'دکان', default:'مقام' }
+    cat: { heritage:'ورثہ', nature:'فطرت', facility:'سہولت', shop:'دکان', signage:'سائن', default:'مقام' }
   },
   id: {
     nearby: 'Tempat terdekat', away: 'jauhnya',
@@ -892,7 +892,7 @@ const I18N = {
     camDenied: 'Izin kamera ditolak', noCamera: 'Kamera tidak tersedia',
     listView: 'Lihat semua tempat:', tryAR: 'Coba AR lagi', closeList: 'Tutup daftar',
     fallbackMsg: r => `${r} — AR tidak tersedia. Anda masih bisa melihat tempat di bawah.`,
-    cat: { heritage:'Warisan', nature:'Alam', facility:'Fasilitas', shop:'Toko', default:'Tempat' }
+    cat: { heritage:'Warisan', nature:'Alam', facility:'Fasilitas', shop:'Toko', signage:'Tanda', default:'Tempat' }
   },
   de: {
     nearby: 'Orte in der Nähe', away: 'entfernt',
@@ -902,7 +902,7 @@ const I18N = {
     camDenied: 'Kamera-Berechtigung verweigert', noCamera: 'Kamera nicht verfügbar',
     listView: 'Alle Orte anzeigen:', tryAR: 'AR erneut versuchen', closeList: 'Liste schließen',
     fallbackMsg: r => `${r} — AR nicht verfügbar. Sie können Orte unten durchsuchen.`,
-    cat: { heritage:'Erbe', nature:'Natur', facility:'Einrichtung', shop:'Geschäft', default:'Ort' }
+    cat: { heritage:'Erbe', nature:'Natur', facility:'Einrichtung', shop:'Geschäft', signage:'Schild', default:'Ort' }
   },
   ko: {
     nearby: '근처 명소', away: '거리',
@@ -912,7 +912,7 @@ const I18N = {
     camDenied: '카메라 권한 거부됨', noCamera: '카메라 사용 불가',
     listView: '모든 명소 보기:', tryAR: 'AR 다시 시도', closeList: '목록 닫기',
     fallbackMsg: r => `${r} — AR을 사용할 수 없습니다. 아래에서 명소를 탐색할 수 있습니다.`,
-    cat: { heritage:'문화유산', nature:'자연', facility:'시설', shop:'상점', default:'명소' }
+    cat: { heritage:'문화유산', nature:'자연', facility:'시설', shop:'상점', signage:'안내판', default:'명소' }
   },
   ms: {
     nearby: 'Tempat berdekatan', away: 'jauh',
@@ -922,7 +922,7 @@ const I18N = {
     camDenied: 'Kebenaran kamera ditolak', noCamera: 'Kamera tidak tersedia',
     listView: 'Lihat semua tempat:', tryAR: 'Cuba AR semula', closeList: 'Tutup senarai',
     fallbackMsg: r => `${r} — AR tidak tersedia. Anda masih boleh melayari tempat di bawah.`,
-    cat: { heritage:'Warisan', nature:'Alam semula jadi', facility:'Kemudahan', shop:'Kedai', default:'Tempat' }
+    cat: { heritage:'Warisan', nature:'Alam semula jadi', facility:'Kemudahan', shop:'Kedai', signage:'Papan tanda', default:'Tempat' }
   }
 };
 
@@ -1562,13 +1562,14 @@ let compassHeading = null;   // degrees from true north, clockwise (null = unava
 let deviceBeta     = 50;     // device pitch: 0=horizontal, 90=vertical
 let overlayPending = false;
 
-const CAT_ICON_MAP = { heritage:'🏯', nature:'🌿', facility:'🚌', shop:'🛍️', default:'📍' };
+const CAT_ICON_MAP = { heritage:'🏯', nature:'🌿', facility:'🚌', shop:'🛍️', signage:'🪧', default:'📍' };
 
 const CAT_COLOR = {
   heritage: '#d97706',
   nature:   '#10b981',
   facility: '#3b82f6',
   shop:     '#ec4899',
+  signage:  '#f59e0b',
   default:  '#6b7280'
 };
 const CAT_BG = {
@@ -1576,6 +1577,7 @@ const CAT_BG = {
   nature:   'rgba(16,185,129,0.09)',
   facility: 'rgba(59,130,246,0.09)',
   shop:     'rgba(236,72,153,0.09)',
+  signage:  'rgba(245,158,11,0.09)',
   default:  'rgba(107,114,128,0.09)'
 };
 function catColor(cat) { return CAT_COLOR[cat] || CAT_COLOR.default; }
