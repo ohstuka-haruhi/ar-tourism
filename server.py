@@ -76,8 +76,23 @@ class Handler(SimpleHTTPRequestHandler):
             self._get_tracks()
         elif path == '/routes.json':
             self._get_routes()
+        elif path == '/spots.json':
+            self._get_spots()
         else:
             super().do_GET()
+
+    def _get_spots(self):
+        try:
+            rows = self._sb('GET', 'spots?id=eq.main&select=data')
+            spots = rows[0]['data'] if rows else []
+            body  = json.dumps(spots, ensure_ascii=False).encode('utf-8')
+        except Exception as e:
+            print(f'  \033[31m✗  spots GET: {e}\033[0m')
+            body = b'[]'
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(body)
 
     def _get_analytics(self):
         try:
@@ -148,18 +163,15 @@ class Handler(SimpleHTTPRequestHandler):
             spots  = json.loads(body)
             if not isinstance(spots, list):
                 raise ValueError('Payload must be a JSON array')
-            with open(SPOTS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(spots, f, ensure_ascii=False, indent=2)
+            self._sb('POST', 'spots',
+                     {'id': 'main', 'data': spots},
+                     {'Prefer': 'resolution=merge-duplicates'})
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({'ok': True, 'count': len(spots)}).encode())
-        except (json.JSONDecodeError, ValueError) as e:
-            self.send_response(400)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-        except OSError as e:
+        except Exception as e:
+            print(f'  \033[31m✗  spots PUT: {e}\033[0m')
             self.send_response(500)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
