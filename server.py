@@ -78,8 +78,42 @@ class Handler(SimpleHTTPRequestHandler):
             self._get_routes()
         elif path == '/spots.json':
             self._get_spots()
+        elif path == '/intro':
+            self._get_intro()
         else:
             super().do_GET()
+
+    def _get_intro(self):
+        try:
+            rows = self._sb('GET', 'intro?id=eq.main&select=data')
+            data = rows[0]['data'] if rows else {}
+            body = json.dumps(data, ensure_ascii=False).encode('utf-8')
+        except Exception as e:
+            print(f'  \033[31m✗  intro GET: {e}\033[0m')
+            body = b'{}'
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _put_intro(self):
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+            data   = json.loads(self.rfile.read(length))
+            self._sb('POST', 'intro',
+                     {'id': 'main', 'data': data},
+                     {'Prefer': 'resolution=merge-duplicates'})
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+        except Exception as e:
+            print(f'  \033[31m✗  intro PUT: {e}\033[0m')
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
 
     def _get_spots(self):
         try:
@@ -147,6 +181,8 @@ class Handler(SimpleHTTPRequestHandler):
     def do_PUT(self):
         if self.path.rstrip('/') == '/' + SPOTS_FILE:
             self._put_spots()
+        elif self.path.rstrip('/') == '/intro':
+            self._put_intro()
         elif re.fullmatch(r'/qr/[a-zA-Z0-9_\-]+\.png', self.path):
             self._put_qr()
         elif re.fullmatch(r'/compiled/[a-zA-Z0-9_\-]+\.mind', self.path):

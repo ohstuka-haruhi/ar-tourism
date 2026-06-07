@@ -518,8 +518,9 @@
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-secondary" onclick="toggleSortMode()" id="sort-mode-btn">⇅ 並び替え</button>
-        <button class="btn btn-secondary" onclick="toggleRouteMode()" id="route-mode-btn">🗺️ 順路設定</button>
+        <button class="btn btn-secondary" onclick="toggleRouteMode()" id="route-mode-btn">🗺️  順路設定</button>
         <button class="btn btn-secondary" onclick="openSpotsMap()">🗺️ 地図で確認</button>
+        <button class="btn btn-secondary" onclick="openIntroModal()">📜 案内メッセージ</button>
         <button class="btn btn-secondary" onclick="openBatchPhotoImport()">📷 写真から一括追加</button>
         <button class="btn btn-primary" onclick="openAddForm()">＋ Add Spot</button>
       </div>
@@ -763,6 +764,43 @@
       <button type="button" class="btn btn-success" id="batch-save-btn" onclick="saveBatchSpots()" disabled>
         まとめて保存（<span id="batch-count">0</span>件）
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Intro Message Modal ── -->
+<div class="modal-backdrop" id="intro-modal" onclick="if(event.target.id==='intro-modal')closeIntroModal()">
+  <div class="modal-body" style="max-width:540px">
+    <div class="modal-title">
+      <span>📜 案内メッセージ設定</span>
+      <button class="modal-close-btn" onclick="closeIntroModal()">✕</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <label style="font-size:13px;font-weight:600">表示する</label>
+      <input type="checkbox" id="intro-enabled" style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent-dark)">
+      <span id="intro-enabled-label" style="font-size:12px;color:var(--muted)">OFF</span>
+    </div>
+    <div class="field" style="margin-bottom:12px">
+      <label>タイトル</label>
+      <input id="intro-title-input" placeholder="例：羽黒山への参拝にあたって" maxlength="60">
+    </div>
+    <div class="field" style="margin-bottom:12px">
+      <label>本文</label>
+      <textarea id="intro-body-input" rows="8" placeholder="ここに解説テキストを入力してください。&#10;&#10;改行も反映されます。" style="min-height:160px"></textarea>
+    </div>
+    <div class="field" style="margin-bottom:6px">
+      <label>表示エリア（この範囲内に入ると表示されます）</label>
+      <div class="coord-row" style="flex-wrap:wrap;gap:6px">
+        <input type="number" id="intro-lat" placeholder="緯度" step="any" style="flex:1;min-width:100px">
+        <input type="number" id="intro-lng" placeholder="経度" step="any" style="flex:1;min-width:100px">
+        <input type="number" id="intro-radius" placeholder="半径(m)" min="10" max="5000" value="300" style="flex:1;min-width:80px">
+        <button type="button" class="btn btn-secondary btn-sm get-loc-btn" onclick="introUseCurrentLocation()">⌖ 現在地</button>
+      </div>
+      <p class="map-hint">現地（山道の入り口など）で「現在地」を押すと自動入力されます</p>
+    </div>
+    <div class="form-footer">
+      <button class="btn btn-secondary" onclick="closeIntroModal()">キャンセル</button>
+      <button class="btn btn-success" onclick="saveIntroMessage()">💾 保存</button>
     </div>
   </div>
 </div>
@@ -2437,6 +2475,73 @@ function renderAnalytics(sessions) {
         </tr>`;
       }).join('')
     : '<tr class="empty-row"><td colspan="5">データなし</td></tr>';
+}
+
+// ─────────────────────────────────────────────────────────
+//  案内メッセージ設定
+// ─────────────────────────────────────────────────────────
+let _introData = {};
+
+async function openIntroModal() {
+  try {
+    const r = await fetch('/intro');
+    if (r.ok) _introData = await r.json();
+  } catch {}
+  const d = _introData;
+  document.getElementById('intro-enabled').checked   = !!d.enabled;
+  document.getElementById('intro-enabled-label').textContent = d.enabled ? 'ON' : 'OFF';
+  document.getElementById('intro-title-input').value = d.title  || '';
+  document.getElementById('intro-body-input').value  = d.body   || '';
+  document.getElementById('intro-lat').value         = d.lat    || '';
+  document.getElementById('intro-lng').value         = d.lng    || '';
+  document.getElementById('intro-radius').value      = d.radius || 300;
+  document.getElementById('intro-modal').classList.add('open');
+}
+
+function closeIntroModal() {
+  document.getElementById('intro-modal').classList.remove('open');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('intro-enabled').addEventListener('change', function() {
+    document.getElementById('intro-enabled-label').textContent = this.checked ? 'ON' : 'OFF';
+  });
+});
+
+function introUseCurrentLocation() {
+  navigator.geolocation.getCurrentPosition(pos => {
+    document.getElementById('intro-lat').value = pos.coords.latitude.toFixed(7);
+    document.getElementById('intro-lng').value = pos.coords.longitude.toFixed(7);
+    showToast('📍 現在地を入力しました');
+  }, () => showToast('位置情報を取得できませんでした'));
+}
+
+async function saveIntroMessage() {
+  const lat    = parseFloat(document.getElementById('intro-lat').value);
+  const lng    = parseFloat(document.getElementById('intro-lng').value);
+  const radius = parseInt(document.getElementById('intro-radius').value, 10);
+  if (isNaN(lat) || isNaN(lng)) { showToast('表示エリアの緯度・経度を入力してください'); return; }
+
+  const data = {
+    enabled: document.getElementById('intro-enabled').checked,
+    title:   document.getElementById('intro-title-input').value.trim(),
+    body:    document.getElementById('intro-body-input').value,
+    lat, lng, radius: isNaN(radius) ? 300 : radius
+  };
+
+  try {
+    const r = await fetch('/intro', {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(data)
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    _introData = data;
+    showToast('📜 案内メッセージを保存しました ✓');
+    closeIntroModal();
+  } catch(e) {
+    showToast('保存失敗: ' + e.message);
+  }
 }
 
 // ─────────────────────────────────────────────────────────
