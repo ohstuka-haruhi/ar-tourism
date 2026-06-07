@@ -345,38 +345,32 @@
     .ar-edge {
       position: absolute;
       pointer-events: auto; cursor: pointer;
-      display: flex; align-items: center; gap: 7px;
+      display: flex; align-items: center; gap: 5px;
       background: rgba(255,255,255,0.93);
       border: 1px solid rgba(0,0,0,0.06);
-      border-radius: 14px;
+      border-radius: 9px;
       transition: top 0.15s ease-out;
-      box-shadow: 0 3px 12px rgba(0,0,0,0.13);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.11);
     }
-    .ar-edge.side-left  { left: 6px; flex-direction: row;         padding: 6px 10px 6px 7px; }
-    .ar-edge.side-right { right: 6px; flex-direction: row-reverse; padding: 6px 7px 6px 10px; }
+    .ar-edge.side-left  { left: 4px; flex-direction: row;         padding: 4px 8px 4px 5px; }
+    .ar-edge.side-right { right: 4px; flex-direction: row-reverse; padding: 4px 5px 4px 8px; }
 
     /* 3D arrow element inside edge pill */
     .edge-3d-wrap {
-      width: 28px; height: 36px; position: relative; flex-shrink: 0;
-      /* filter (drop-shadow) applied via JS with category color */
+      width: 20px; height: 26px; position: relative; flex-shrink: 0;
     }
     .edge-arrow-body {
       position: absolute; inset: 0;
-      transform: perspective(120px) rotateX(36deg);
+      transform: perspective(100px) rotateX(36deg);
       transform-origin: center bottom;
       transition: background 0.2s ease;
     }
-    /* Left-pointing arrow: tip at left, base at right */
     .edge-arrow-body.side-left {
       clip-path: polygon(0% 50%, 38% 0%, 38% 28%, 100% 28%, 100% 72%, 38% 72%, 38% 100%);
-      /* gradient: tip(left)=faint → base(right)=solid */
     }
-    /* Right-pointing arrow: tip at right, base at left */
     .edge-arrow-body.side-right {
       clip-path: polygon(100% 50%, 62% 0%, 62% 28%, 0% 28%, 0% 72%, 62% 72%, 62% 100%);
-      /* gradient: base(left)=solid → tip(right)=faint */
     }
-    /* Center highlight stripe (clipped to arrow shape) */
     .edge-arrow-body::before {
       content: ''; position: absolute;
       top: 4%; bottom: 32%; left: 44%; right: 44%;
@@ -385,10 +379,10 @@
     }
 
     .edge-info { display: flex; flex-direction: column; overflow: hidden; }
-    .ar-edge-name { font-size: 11px; font-weight: 600; color: #1a1a2e;
+    .ar-edge-name { font-size: 10px; font-weight: 600; color: #1a1a2e;
                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-                    max-width: 100px; }
-    .ar-edge-dist { font-size: 9px; }
+                    max-width: 70px; }
+    .ar-edge-dist { font-size: 8px; }
 
     /* ── Front-facing distance indicator (3D road arrow) ── */
     #front-indicator {
@@ -1705,8 +1699,8 @@ function renderAROverlay() {
   // Selected spot bypasses ARROW_MAX_DIST limit
   const edgeData  = data.filter(d => !d.inView &&
     (d.dist <= ARROW_MAX_DIST || d.spot.id === selectedSpotId));
-  const leftEdge  = edgeData.filter(d => d.rel < 0).sort((a, b) => a.dist - b.dist).slice(0, 4);
-  const rightEdge = edgeData.filter(d => d.rel > 0).sort((a, b) => a.dist - b.dist).slice(0, 4);
+  const leftEdge  = edgeData.filter(d => d.rel < 0).sort((a, b) => a.dist - b.dist).slice(0, 2);
+  const rightEdge = edgeData.filter(d => d.rel > 0).sort((a, b) => a.dist - b.dist).slice(0, 2);
 
   // ── DOM update: remove stale elements ──
   const calloutIds = new Set(callouts.map(d => d.spot.id));
@@ -1725,7 +1719,7 @@ function renderAROverlay() {
   });
 
   // ── Render edge arrows ──
-  const EDGE_H = 50, EDGE_GAP = 6;
+  const EDGE_H = 34, EDGE_GAP = 4;
   [leftEdge, rightEdge].forEach((group, si) => {
     const side   = si === 0 ? 'left' : 'right';
     const totalH = group.length * (EDGE_H + EDGE_GAP) - EDGE_GAP;
