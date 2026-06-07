@@ -343,6 +343,20 @@
       border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
 
+    /* ── カテゴリチェックボックス ── */
+    .cat-check-label {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 12px; cursor: pointer; user-select: none;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 7px; padding: 5px 10px; transition: all 0.12s;
+    }
+    .cat-check-label input { display: none; }
+    .cat-check-label[data-cat="heritage"].checked { background:rgba(217,119,6,0.12); color:#b45309; border-color:rgba(217,119,6,0.35); font-weight:600; }
+    .cat-check-label[data-cat="nature"].checked   { background:rgba(16,185,129,0.12); color:#047857; border-color:rgba(16,185,129,0.35); font-weight:600; }
+    .cat-check-label[data-cat="facility"].checked { background:rgba(59,130,246,0.12); color:#1d4ed8; border-color:rgba(59,130,246,0.35); font-weight:600; }
+    .cat-check-label[data-cat="shop"].checked     { background:rgba(236,72,153,0.12); color:#be185d; border-color:rgba(236,72,153,0.35); font-weight:600; }
+    .cat-check-label[data-cat="signage"].checked  { background:rgba(139,92,246,0.12); color:#6d28d9; border-color:rgba(139,92,246,0.35); font-weight:600; }
+
     /* ── Lang tab select ── */
     .lang-tab-select {
       padding: 5px 22px 5px 9px; border: 1px solid var(--border);
@@ -651,15 +665,15 @@
         </div>
 
         <!-- Category & Radius -->
-        <div class="field">
-          <label>Category</label>
-          <select id="f-category">
-            <option value="heritage">🏯 歴史文化</option>
-            <option value="nature">🌿 自然景観</option>
-            <option value="facility">🚌 公共施設</option>
-            <option value="shop">🛍️ お店</option>
-            <option value="signage">🪧 案内・看板・注意</option>
-          </select>
+        <div class="field full">
+          <label>Category（複数選択可）</label>
+          <div id="f-category-group" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
+            <label class="cat-check-label" data-cat="heritage"><input type="checkbox" class="f-cat-check" value="heritage"> 🏯 歴史文化</label>
+            <label class="cat-check-label" data-cat="nature"><input type="checkbox" class="f-cat-check" value="nature"> 🌿 自然景観</label>
+            <label class="cat-check-label" data-cat="facility"><input type="checkbox" class="f-cat-check" value="facility"> 🚌 公共施設</label>
+            <label class="cat-check-label" data-cat="shop"><input type="checkbox" class="f-cat-check" value="shop"> 🛍️ お店</label>
+            <label class="cat-check-label" data-cat="signage"><input type="checkbox" class="f-cat-check" value="signage"> 🪧 案内・看板・注意</label>
+          </div>
         </div>
         <div class="field">
           <label>Detection Radius (m)</label>
@@ -707,7 +721,14 @@
 
         <!-- Hours -->
         <div class="field full">
-          <label>営業時間 Hours</label>
+          <label style="display:flex;align-items:center;gap:8px">
+            営業時間 Hours
+            <label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:11px;cursor:pointer">
+              <input type="checkbox" id="f-hours-enabled" onchange="toggleHoursSection()" style="width:14px;height:14px;accent-color:var(--accent-dark)">
+              設定する
+            </label>
+          </label>
+          <div id="f-hours-section" style="display:none;margin-top:8px">
           <div class="hours-row">
             <input type="time" id="f-hours-open" value="09:00">
             <span>〜</span>
@@ -723,6 +744,7 @@
             <label class="day-label"><input type="checkbox" class="f-closed-day" value="sat">土</label>
             <label class="day-label"><input type="checkbox" class="f-closed-day" value="sun">日</label>
           </div>
+          </div><!-- /#f-hours-section -->
         </div>
       </div>
 
@@ -1014,7 +1036,7 @@ function renderTable() {
   tbody.innerHTML = spots.map(s => {
     const name    = s.name.jp || s.name.en || Object.values(s.name)[0] || '';
     const desc    = (s.description.jp || s.description.en || Object.values(s.description)[0] || '').slice(0, 80);
-    const cat     = s.category || 'gate';
+    const cats    = Array.isArray(s.category) ? s.category : [s.category || 'heritage'];
     const inRoute = !!s.inRoute;
     const rIdx    = routeIdxMap[s.id];
     const badge   = (rIdx !== undefined)
@@ -1028,7 +1050,7 @@ function renderTable() {
         ${routeMode ? `<input type="checkbox" class="route-check" data-id="${s.id}" ${inRoute ? 'checked' : ''}>${badge}` : ''}
       </td>
       <td class="name-cell"><span class="ellipsis" style="max-width:160px">${esc(name)}</span></td>
-      <td><span class="cat-badge ${CAT_COLORS[cat] || ''}">${esc(cat)}</span></td>
+      <td style="white-space:nowrap">${cats.map(c => `<span class="cat-badge ${CAT_COLORS[c] || ''}">${esc(c)}</span>`).join(' ')}</td>
       <td class="coord">${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}</td>
       <td>${s.radius || 50}m</td>
       <td class="desc-cell"><span class="ellipsis">${esc(desc)}${desc.length >= 80 ? '…' : ''}</span></td>
@@ -1569,6 +1591,9 @@ function openAddForm() {
   document.getElementById('spot-form').reset();
   document.getElementById('f-id').value = '';
   document.getElementById('f-radius').value = '50';
+  setCategories(['heritage']);
+  document.getElementById('f-hours-enabled').checked = false;
+  document.getElementById('f-hours-section').style.display = 'none';
   document.getElementById('f-hours-open').value  = '09:00';
   document.getElementById('f-hours-close').value = '17:00';
   setClosedDays([]);
@@ -1608,10 +1633,13 @@ function openEditForm(id) {
     const aEl = document.getElementById(`f-addr-${l.code}`);
     if (aEl) aEl.value = (spot.address || {})[l.code] || '';
   });
-  document.getElementById('f-category').value = spot.category || 'heritage';
+  setCategories(spot.category);
   document.getElementById('f-radius').value   = spot.radius || 50;
   document.getElementById('f-lat').value      = spot.lat;
   document.getElementById('f-lng').value      = spot.lng;
+  const hasHours = spot.hours && spot.hours.open;
+  document.getElementById('f-hours-enabled').checked = !!hasHours;
+  document.getElementById('f-hours-section').style.display = hasHours ? 'block' : 'none';
   document.getElementById('f-hours-open').value  = (spot.hours || {}).open  || '09:00';
   document.getElementById('f-hours-close').value = (spot.hours || {}).close || '17:00';
   setClosedDays((spot.hours || {}).closed_days || []);
@@ -1670,6 +1698,31 @@ function switchAddrTab(code) {
   if (sel) sel.value = code;
 }
 
+// ── カテゴリチェックボックス ────────────────────────────
+function setCategories(cats) {
+  const arr = Array.isArray(cats) ? cats : (cats ? [cats] : []);
+  document.querySelectorAll('.f-cat-check').forEach(cb => {
+    const checked = arr.includes(cb.value);
+    cb.checked = checked;
+    cb.closest('.cat-check-label').classList.toggle('checked', checked);
+  });
+  // 何もなければ heritage をデフォルト選択
+  if (!arr.length) {
+    const first = document.querySelector('.f-cat-check[value="heritage"]');
+    if (first) { first.checked = true; first.closest('.cat-check-label').classList.add('checked'); }
+  }
+}
+
+function getCategories() {
+  return [...document.querySelectorAll('.f-cat-check:checked')].map(cb => cb.value);
+}
+
+// ── 営業時間セクション切り替え ────────────────────────
+function toggleHoursSection() {
+  const enabled = document.getElementById('f-hours-enabled').checked;
+  document.getElementById('f-hours-section').style.display = enabled ? 'block' : 'none';
+}
+
 function setClosedDays(days) {
   document.querySelectorAll('.f-closed-day').forEach(cb => {
     const checked = days.includes(cb.value);
@@ -1698,9 +1751,12 @@ async function handleFormSubmit(e) {
   const nameEn = (document.getElementById('f-name-en') || {}).value?.trim() || '';
   if (!nameEn) { showToast('English name is required'); return; }
 
-  const hoursOpen  = document.getElementById('f-hours-open').value;
-  const hoursClose = document.getElementById('f-hours-close').value;
-  const closedDays = getClosedDays();
+  const cats       = getCategories();
+  if (!cats.length) { showToast('カテゴリを1つ以上選択してください'); return; }
+  const hoursEnabled = document.getElementById('f-hours-enabled').checked;
+  const hoursOpen    = document.getElementById('f-hours-open').value;
+  const hoursClose   = document.getElementById('f-hours-close').value;
+  const closedDays   = getClosedDays();
 
   // Collect all language values
   const nameObj = {}, descObj = {}, addrObj = {};
@@ -1720,13 +1776,13 @@ async function handleFormSubmit(e) {
 
   const spot = {
     id:       document.getElementById('f-id').value || genId(),
-    category: document.getElementById('f-category').value,
+    category: cats.length === 1 ? cats[0] : cats,
     lat, lng,
     radius:   parseInt(document.getElementById('f-radius').value, 10) || 50,
     name:        nameObj,
     description: descObj,
     address:     addrObj,
-    hours:   { open: hoursOpen, close: hoursClose, closed_days: closedDays }
+    hours: hoursEnabled ? { open: hoursOpen, close: hoursClose, closed_days: closedDays } : null
   };
 
   const existing = spots.findIndex(s => s.id === spot.id);
@@ -2556,6 +2612,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Build 15-language input panels for the form
   buildFormLangFields();
+
+  // カテゴリチェックボックスのスタイル切り替え
+  document.getElementById('f-category-group').addEventListener('change', e => {
+    if (e.target.classList.contains('f-cat-check')) {
+      e.target.closest('.cat-check-label').classList.toggle('checked', e.target.checked);
+    }
+  });
 
   // Day-label toggle styling
   document.getElementById('closed-days-row').addEventListener('change', e => {

@@ -379,9 +379,11 @@
     }
 
     .edge-info { display: flex; flex-direction: column; overflow: hidden; }
+    .ar-edge-name-row { display: flex; align-items: center; gap: 3px; }
     .ar-edge-name { font-size: 10px; font-weight: 600; color: #1a1a2e;
                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-                    max-width: 70px; }
+                    max-width: 65px; }
+    .ar-edge-status { font-size: 6px; flex-shrink: 0; line-height: 1; }
     .ar-edge-dist { font-size: 8px; }
 
     /* ── Front-facing distance indicator (3D road arrow) ── */
@@ -1079,7 +1081,7 @@ function refreshChips() {
 
   ranked.forEach(({ s, dist }) => {
     const chip      = document.createElement('div');
-    const color     = catColor(s.category);
+    const color     = primaryCatColor(s);
     const openState = isOpen(s);
     const dotColor  = openState === true  ? '#10b981'
                     : openState === false ? '#ef4444'
@@ -1113,7 +1115,7 @@ function openModal(spot, dist) {
   selectedSpotId    = spot.id;
   window._activeSpot = spot;
   window._activeDist = dist;
-  document.getElementById('modal-cat').textContent  = tCat(spot.category || 'default');
+  document.getElementById('modal-cat').textContent  = spotCategories(spot).map(c => tCat(c)).join(' · ');
   document.getElementById('modal-name').textContent = spot.name[lang] || spot.name.jp || spot.name.en;
   document.getElementById('modal-dist').textContent =
     dist != null ? `${Math.round(dist)}m ${t('away')}` : '';
@@ -1151,7 +1153,7 @@ function openModal(spot, dist) {
 
   // ナビボタンのカテゴリカラーを設定して表示
   const navBtn = document.getElementById('nav-btn');
-  navBtn.style.background = catColor(spot.category);
+  navBtn.style.background = primaryCatColor(spot);
   navBtn.style.display    = 'block';
 
   // 方向矢印を即更新（選択スポットは距離制限なし）
@@ -1184,8 +1186,8 @@ function initModalMap(spot) {
     maxZoom: 18
   }).addTo(_modalMap);
 
-  const color  = catColor(spot.category);
-  const icon   = CAT_ICON_MAP[spot.category] || '📍';
+  const color  = primaryCatColor(spot);
+  const icon   = primaryCatIcon(spot);
   const bounds = [];
 
   // ── スポットマーカー（カテゴリアイコン入り円形バッジ）──
@@ -1373,7 +1375,7 @@ function initMiniMap(spot) {
   if (_miniMap) { _miniMap.remove(); _miniMap = null; }
   _miniMapPosMarker = null;
 
-  const color = catColor(spot.category);
+  const color = primaryCatColor(spot);
   container.style.border = `3px solid ${color}`;
 
   _miniMap = L.map(container, {
@@ -1484,7 +1486,7 @@ function buildFilterBar() {
   bar.innerHTML = '';
 
   // Collect categories present in current spots
-  const usedCats = [...new Set(spots.map(s => s.category || 'default'))];
+  const usedCats = [...new Set(spots.flatMap(s => spotCategories(s)).filter(c => c !== 'default'))];
 
   // Define tag order (known categories first, then any extras)
   const ORDER = ['heritage', 'nature', 'facility', 'shop'];
@@ -1521,8 +1523,9 @@ function setFilter(cat) {
   });
 
   // Show / hide cards
-  document.querySelectorAll('#fb-list .fb-card[data-category]').forEach(card => {
-    const match = cat === 'all' || card.dataset.category === cat;
+  document.querySelectorAll('#fb-list .fb-card[data-categories]').forEach(card => {
+    const cats  = JSON.parse(card.dataset.categories || '[]');
+    const match = cat === 'all' || cats.includes(cat);
     card.classList.toggle('hidden', !match);
   });
 }
@@ -1535,19 +1538,17 @@ function refreshFallbackList() {
     .sort((a, b) => (a.dist ?? 9e9) - (b.dist ?? 9e9))
     .forEach(({ s, dist }) => {
       const card = document.createElement('div');
+      const sCats = spotCategories(s);
       card.className = 'fb-card';
-      card.dataset.category = s.category || 'default';
-      // Apply hidden if a filter is active and doesn't match
-      if (activeFilter !== 'all' && card.dataset.category !== activeFilter) {
-        card.classList.add('hidden');
-      }
-      const color = catColor(s.category);
+      card.dataset.categories = JSON.stringify(sCats);
+      if (activeFilter !== 'all' && !sCats.includes(activeFilter)) card.classList.add('hidden');
+      const color = primaryCatColor(s);
       const desc  = s.description[lang] || s.description.jp || s.description.en || '';
       card.innerHTML = `
         <div class="fb-card-header">
           <h3>${s.name[lang] || s.name.jp || s.name.en}</h3>
           <span class="fb-badge" style="background:${color}22;color:${color}">
-            ${CAT_ICON_MAP[s.category] || '📍'} ${tCat(s.category || 'default')}
+            ${primaryCatIcon(s)} ${spotCategories(s).map(c => tCat(c)).join(' · ')}
           </span>
         </div>
         <p>${desc.length > 130 ? desc.slice(0,130) + '…' : desc}</p>
@@ -1656,6 +1657,18 @@ const CAT_BG = {
 };
 function catColor(cat) { return CAT_COLOR[cat] || CAT_COLOR.default; }
 function catBg(cat)    { return CAT_BG[cat]    || CAT_BG.default;    }
+
+// 複数カテゴリ対応ヘルパー
+function spotCategories(spot) {
+  const c = spot.category;
+  if (Array.isArray(c) && c.length) return c;
+  if (typeof c === 'string' && c)   return [c];
+  return ['default'];
+}
+function primaryCat(spot)      { return spotCategories(spot)[0]; }
+function primaryCatColor(spot) { return catColor(primaryCat(spot)); }
+function primaryCatBg(spot)    { return catBg(primaryCat(spot)); }
+function primaryCatIcon(spot)  { return CAT_ICON_MAP[primaryCat(spot)] || CAT_ICON_MAP.default; }
 
 // Returns true=open, false=closed, null=no hours set
 function isOpen(spot) {
@@ -1807,7 +1820,7 @@ function renderAROverlay() {
     group.forEach((d, i) => {
       let el = overlay.querySelector(`.ar-edge[data-id="${d.spot.id}"]`);
       if (!el) { el = buildEdgeEl(d.spot, side); overlay.appendChild(el); }
-      const color = catColor(d.spot.category);
+      const color = primaryCatColor(d.spot);
       el.className   = `ar-edge side-${side}`;
       el.style.top   = `${startY + i * (EDGE_H + EDGE_GAP)}px`;
       // 3D arrow body: gradient fades toward tip (far end)
@@ -1822,6 +1835,13 @@ function renderAROverlay() {
       el.querySelector('.ar-edge-dist').style.color = color;
       el.querySelector('.ar-edge-name').textContent = d.spot.name[lang] || d.spot.name.jp || d.spot.name.en;
       el.querySelector('.ar-edge-dist').textContent = `${Math.round(d.dist)}m`;
+      const statusEl  = el.querySelector('.ar-edge-status');
+      const openState = isOpen(d.spot);
+      if (statusEl) {
+        if      (openState === true)  { statusEl.textContent = '●'; statusEl.style.color = '#10b981'; }
+        else if (openState === false) { statusEl.textContent = '●'; statusEl.style.color = '#ef4444'; }
+        else                          { statusEl.textContent = '';  }
+      }
     });
   });
   renderPathwayOverlay();
@@ -1833,7 +1853,7 @@ function updateFrontIndicator(d) {
     el.classList.remove('visible');
     return;
   }
-  const color = catColor(d.spot.category);
+  const color = primaryCatColor(d.spot);
   // 3D arrow: gradient from transparent (far/top) to solid color (near/bottom)
   const body = el.querySelector('.nav-arrow-body');
   if (body) {
@@ -1850,7 +1870,7 @@ function updateFrontIndicator(d) {
 }
 
 function buildCalloutEl(spot) {
-  const color = catColor(spot.category);
+  const color = primaryCatColor(spot);
   const el = document.createElement('div');
   el.className  = 'ar-callout';
   el.dataset.id = spot.id;
@@ -1878,8 +1898,8 @@ function buildCalloutEl(spot) {
 }
 
 function refreshCallout(el, spot, dist) {
-  el.querySelector('.ar-cat-icon').textContent  = CAT_ICON_MAP[spot.category] || CAT_ICON_MAP.default;
-  el.querySelector('.ar-cat-label').textContent = tCat(spot.category || 'default');
+  el.querySelector('.ar-cat-icon').textContent  = primaryCatIcon(spot);
+  el.querySelector('.ar-cat-label').textContent = spotCategories(spot).map(c => tCat(c)).join('/');
   el.querySelector('.ar-spot-name').textContent = spot.name[lang] || spot.name.jp || spot.name.en;
   const desc = spot.description[lang] || spot.description.jp || spot.description.en || '';
   el.querySelector('.ar-spot-desc').textContent = firstSentence(desc);
@@ -1895,7 +1915,10 @@ function buildEdgeEl(spot, side) {
       <div class="edge-arrow-body side-${side}"></div>
     </div>
     <div class="edge-info">
-      <span class="ar-edge-name"></span>
+      <div class="ar-edge-name-row">
+        <span class="ar-edge-name"></span>
+        <span class="ar-edge-status"></span>
+      </div>
       <span class="ar-edge-dist"></span>
     </div>
   `;
