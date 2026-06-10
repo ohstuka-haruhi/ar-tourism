@@ -1003,6 +1003,7 @@ function buildFormLangFields() {
 //  Data management  (server-side spots.json via PUT)
 // ─────────────────────────────────────────────────────────
 let spots = [];
+let _spotsLoaded = false;
 
 async function loadSpots() {
   try {
@@ -1013,6 +1014,7 @@ async function loadSpots() {
     console.warn('Could not load spots.json:', e);
     spots = [];
   }
+  _spotsLoaded = true;
 }
 
 async function saveSpots() {
@@ -1072,7 +1074,9 @@ function renderTable() {
   routeOrdered.forEach((s, i) => { routeIdxMap[s.id] = i; });
 
   if (spots.length === 0) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No spots yet. Click "Add Spot" to create one.</td></tr>';
+    tbody.innerHTML = _spotsLoaded
+      ? '<tr class="empty-row"><td colspan="7">No spots yet. Click "Add Spot" to create one.</td></tr>'
+      : '<tr class="empty-row"><td colspan="7">⏳ スポットを読み込み中...</td></tr>';
     return;
   }
 
@@ -2794,6 +2798,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  renderTable();        // ローディング表示（_spotsLoaded=false の間は「読み込み中」）
   await loadSpots();
   renderTable();
   initRouteEvents();
