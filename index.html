@@ -1718,7 +1718,7 @@ function initPermissionsAndAR() {
 //  Compass + AR HTML Overlay
 // ─────────────────────────────────────────────────────────
 const H_FOV          = 62;   // horizontal camera field of view (degrees)
-const ARROW_MAX_DIST = 500;  // max distance (m) to show edge arrows
+const ARROW_MAX_DIST = 100;  // max distance (m) to show edge arrows (default)
 
 let compassHeading = null;   // degrees from true north, clockwise (null = unavailable)
 let deviceBeta     = 50;     // device pitch: 0=horizontal, 90=vertical
@@ -1867,18 +1867,19 @@ function renderAROverlay() {
     d.finalY = y;
   });
 
+  // スポットごとの矢印表示距離（arMaxDist未設定ならARROW_MAX_DIST）
+  const spotMaxDist = s => s.arMaxDist > 0 ? s.arMaxDist : ARROW_MAX_DIST;
+
   // ── Front indicator: in-view, outside radius, closest only ──
-  // Selected spot bypasses ARROW_MAX_DIST limit
   const frontCandidates = data
     .filter(d => d.inView && !d.inRadius &&
-      (d.dist <= ARROW_MAX_DIST || d.spot.id === selectedSpotId))
+      (d.dist <= spotMaxDist(d.spot) || d.spot.id === selectedSpotId))
     .sort((a, b) => a.dist - b.dist);
   updateFrontIndicator(frontCandidates[0] || null);
 
-  // ── Edge arrows: out of view, within ARROW_MAX_DIST ──
-  // Selected spot bypasses ARROW_MAX_DIST limit
+  // ── Edge arrows: out of view ──
   const edgeData  = data.filter(d => !d.inView &&
-    (d.dist <= ARROW_MAX_DIST || d.spot.id === selectedSpotId));
+    (d.dist <= spotMaxDist(d.spot) || d.spot.id === selectedSpotId));
   const leftEdge  = edgeData.filter(d => d.rel < 0).sort((a, b) => a.dist - b.dist).slice(0, 2);
   const rightEdge = edgeData.filter(d => d.rel > 0).sort((a, b) => a.dist - b.dist).slice(0, 2);
 

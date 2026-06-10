@@ -676,8 +676,12 @@
           </div>
         </div>
         <div class="field">
-          <label>Detection Radius (m)</label>
+          <label>検知半径 Radius (m)</label>
           <input type="number" id="f-radius" value="50" min="5" max="1000" required>
+        </div>
+        <div class="field">
+          <label>AR矢印表示距離 (m)</label>
+          <input type="number" id="f-ar-max-dist" placeholder="省略時: 100m" min="10" max="1000">
         </div>
 
         <!-- Coordinates -->
@@ -1601,7 +1605,8 @@ function openAddForm() {
   document.getElementById('save-btn').textContent   = 'Save Spot';
   document.getElementById('spot-form').reset();
   document.getElementById('f-id').value = '';
-  document.getElementById('f-radius').value = '50';
+  document.getElementById('f-radius').value        = '50';
+  document.getElementById('f-ar-max-dist').value   = '';
   setCategories(['heritage']);
   document.getElementById('f-hours-enabled').checked = false;
   document.getElementById('f-hours-section').style.display = 'none';
@@ -1645,7 +1650,8 @@ function openEditForm(id) {
     if (aEl) aEl.value = (spot.address || {})[l.code] || '';
   });
   setCategories(spot.category);
-  document.getElementById('f-radius').value   = spot.radius || 50;
+  document.getElementById('f-radius').value        = spot.radius || 50;
+  document.getElementById('f-ar-max-dist').value   = spot.arMaxDist || '';
   document.getElementById('f-lat').value      = spot.lat;
   document.getElementById('f-lng').value      = spot.lng;
   const hasHours = spot.hours && spot.hours.open;
@@ -1789,7 +1795,8 @@ async function handleFormSubmit(e) {
     id:       document.getElementById('f-id').value || genId(),
     category: cats.length === 1 ? cats[0] : cats,
     lat, lng,
-    radius:   parseInt(document.getElementById('f-radius').value, 10) || 50,
+    radius:      parseInt(document.getElementById('f-radius').value, 10) || 50,
+    arMaxDist:   parseInt(document.getElementById('f-ar-max-dist').value, 10) || null,
     name:        nameObj,
     description: descObj,
     address:     addrObj,
