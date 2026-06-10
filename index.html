@@ -458,6 +458,34 @@
     #dir-icon  { font-size: 16px; line-height: 1; }
     #dir-label { font-size: 10px; color: rgba(255,255,255,0.85); font-weight: 600; white-space: nowrap; }
 
+    /* ── Language picker (first-launch) ── */
+    #lang-picker {
+      display: none; position: fixed; inset: 0; z-index: 300;
+      background: #f8f9fa;
+      flex-direction: column; align-items: center; justify-content: center;
+      padding: 28px 20px;
+      overflow-y: auto;
+    }
+    #lang-picker.show { display: flex; }
+    #lang-picker-icon  { font-size: 48px; margin-bottom: 12px; }
+    #lang-picker-title { font-size: 20px; font-weight: 800; color: #1a1a2e; margin-bottom: 6px; }
+    #lang-picker-sub   { font-size: 12px; color: #666; margin-bottom: 28px; text-align: center; line-height: 1.7; }
+    #lang-picker-grid  {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 9px; width: 100%; max-width: 360px;
+    }
+    .lang-pick-btn {
+      background: #fff; border: 1.5px solid #e0e0e0;
+      border-radius: 12px; padding: 13px 6px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      color: #1a1a2e; text-align: center;
+      transition: background 0.15s, border-color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .lang-pick-btn:active, .lang-pick-btn:hover {
+      background: var(--accent); color: #fff; border-color: var(--accent);
+    }
+
     /* ── Intro message overlay ── */
     #intro-overlay {
       display: none; position: fixed; inset: 0; z-index: 200;
@@ -628,6 +656,17 @@
 
 <!-- ── AR HTML Overlay (compass callouts) ── -->
 <div id="ar-overlay"></div>
+<!-- ── Language picker (first launch) ── -->
+<div id="lang-picker">
+  <div id="lang-picker-icon">⛩</div>
+  <div id="lang-picker-title">ナビゲーションAR</div>
+  <div id="lang-picker-sub">
+    言語を選択してください<br>
+    Choose your language / 请选择语言
+  </div>
+  <div id="lang-picker-grid"></div>
+</div>
+
 <!-- ── Intro message overlay ── -->
 <div id="intro-overlay">
   <div id="intro-card">
@@ -1030,9 +1069,48 @@ async function loadIntroConfig() {
 
 function checkIntroTrigger() {
   if (_introShown || !_introConfig || !_introConfig.enabled) return;
+  if (isLangPickerShowing()) return; // 言語選択中は待機
   if (!userPos || !_introConfig.lat || !_introConfig.lng) return;
   const dist = haversine(userPos.lat, userPos.lng, _introConfig.lat, _introConfig.lng);
   if (dist <= (_introConfig.radius || 300)) showIntroOverlay();
+}
+
+// ─────────────────────────────────────────────────────────
+//  初回起動：言語選択画面
+// ─────────────────────────────────────────────────────────
+const LANG_LIST = [
+  { code: 'jp', label: '日本語' }, { code: 'en', label: 'English' },
+  { code: 'zh', label: '中文' },   { code: 'hi', label: 'हिंदी' },
+  { code: 'es', label: 'Español'}, { code: 'fr', label: 'Français'},
+  { code: 'ar', label: 'العربية'},{ code: 'bn', label: 'বাংলা' },
+  { code: 'pt', label: 'Português'},{ code: 'ru', label: 'Русский'},
+  { code: 'ur', label: 'اردو' },  { code: 'id', label: 'Indonesia'},
+  { code: 'de', label: 'Deutsch'},  { code: 'ko', label: '한국어' },
+  { code: 'ms', label: 'Melayu' }
+];
+
+let _langPickerCallback = null;
+
+function initLangPicker(onDone) {
+  _langPickerCallback = onDone;
+  const grid = document.getElementById('lang-picker-grid');
+  grid.innerHTML = '';
+  LANG_LIST.forEach(l => {
+    const btn = document.createElement('button');
+    btn.className   = 'lang-pick-btn';
+    btn.textContent = l.label;
+    btn.addEventListener('click', () => {
+      setLang(l.code);
+      document.getElementById('lang-picker').classList.remove('show');
+      if (_langPickerCallback) _langPickerCallback();
+    });
+    grid.appendChild(btn);
+  });
+  document.getElementById('lang-picker').classList.add('show');
+}
+
+function isLangPickerShowing() {
+  return document.getElementById('lang-picker').classList.contains('show');
 }
 
 // 文字列または多言語オブジェクトから現在の言語のテキストを取得
@@ -2565,8 +2643,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   await Promise.all([loadSpots(), loadIntroConfig()]);
   refreshChips();
   updateRouteProgress();
-  initPermissionsAndAR();
-  Vision.start();
+
+  function startApp() {
+    initPermissionsAndAR();
+    Vision.start();
+  }
+
+  // 初回起動（言語未設定）は言語選択画面を表示してから起動
+  if (!localStorage.getItem('arLang')) {
+    initLangPicker(startApp);
+  } else {
+    startApp();
+  }
 
   // Compass init — iOS 13+ requires a user-gesture to grant DeviceOrientation permission
   if (typeof DeviceOrientationEvent !== 'undefined' &&
