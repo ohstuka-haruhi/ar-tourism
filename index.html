@@ -1035,10 +1035,19 @@ function checkIntroTrigger() {
   if (dist <= (_introConfig.radius || 300)) showIntroOverlay();
 }
 
+// 文字列または多言語オブジェクトから現在の言語のテキストを取得
+function _introText(field, fallback) {
+  if (!field) return fallback || '';
+  if (typeof field === 'string') return field;
+  return field[lang] || field.jp || field.en || fallback || '';
+}
+
 function showIntroOverlay() {
   if (_introShown) return;
-  document.getElementById('intro-card-title').textContent = _introConfig.title || '';
-  document.getElementById('intro-card-body').textContent  = _introConfig.body  || '';
+  const c = _introConfig;
+  document.getElementById('intro-card-title').textContent = _introText(c.title);
+  document.getElementById('intro-card-body').textContent  = _introText(c.body);
+  document.getElementById('intro-card-btn').textContent   = _introText(c.btn, '始める');
   document.getElementById('intro-overlay').classList.add('show');
   _introShown = true;
   sessionStorage.setItem('introShown', 'true');
