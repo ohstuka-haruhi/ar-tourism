@@ -16,7 +16,14 @@
 ## 重要な注意事項
 - Renderの無料プランはファイルへの書き込みが再起動で消えるため、データはすべてSupabaseに保存
 - Supabase URL：https://pjcbjkjzxzwbxwmrebud.supabase.co
-- Supabaseテーブル：pathways、analytics、tracks
+- Supabaseテーブル：spots、intro、pathways、analytics、tracks
+  - spots：スポット一覧（id='main'の1行にJSONB配列として保存）
+  - intro：案内メッセージ（id='main'の1行に保存）
+  - analytics：閲覧ログ（セッションIDをキーに保存）
+  - tracks：GPS軌跡（セッションIDをキーに保存）
+  - pathways：通路・順路データ（UUIDをPKとして複数行）
+- テーブルが存在しない場合は supabase_schema.sql をSupabase SQL Editorで実行して作成すること
+- Supabase無料プランは1週間操作がないとプロジェクトが一時停止されるため注意
 
 ## 現在の機能
 - 15言語対応（ja/en/zh/hi/es/fr/ar/bn/pt/ru/ur/id/de/ko/ms）

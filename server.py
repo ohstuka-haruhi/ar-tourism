@@ -118,11 +118,29 @@ class Handler(SimpleHTTPRequestHandler):
     def _get_spots(self):
         try:
             rows = self._sb('GET', 'spots?id=eq.main&select=data')
-            spots = rows[0]['data'] if rows else []
-            body  = json.dumps(spots, ensure_ascii=False).encode('utf-8')
+            if rows:
+                # Row exists in Supabase — use its data (even if empty array)
+                spots = rows[0]['data']
+                body  = json.dumps(spots, ensure_ascii=False).encode('utf-8')
+            else:
+                # No row yet — seed from local spots.json and write to Supabase
+                with open(SPOTS_FILE, encoding='utf-8') as f:
+                    spots = json.load(f)
+                try:
+                    self._sb('POST', 'spots',
+                             {'id': 'main', 'data': spots},
+                             {'Prefer': 'resolution=merge-duplicates'})
+                    print('  \033[32m✓  spots: Supabase が空のためローカルファイルからシード完了\033[0m')
+                except Exception as seed_err:
+                    print(f'  \033[33m⚠  spots: Supabaseへのシード失敗（テーブル未作成の可能性）: {seed_err}\033[0m')
+                body = json.dumps(spots, ensure_ascii=False).encode('utf-8')
         except Exception as e:
-            print(f'  \033[31m✗  spots GET: {e}\033[0m')
-            body = b'[]'
+            print(f'  \033[31m✗  spots GET (Supabase): {e} — ローカルファイルにフォールバック\033[0m')
+            try:
+                with open(SPOTS_FILE, encoding='utf-8') as f:
+                    body = f.read().encode('utf-8')
+            except OSError:
+                body = b'[]'
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
@@ -200,6 +218,14 @@ class Handler(SimpleHTTPRequestHandler):
             spots  = json.loads(body)
             if not isinstance(spots, list):
                 raise ValueError('Payload must be a JSON array')
+
+            # Always write to local file as backup (ephemeral on Render but useful for fallback within same session)
+            try:
+                with open(SPOTS_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(spots, f, ensure_ascii=False, indent=2)
+            except OSError as file_err:
+                print(f'  \033[33m⚠  spots: ローカルファイル書き込み失敗: {file_err}\033[0m')
+
             self._sb('POST', 'spots',
                      {'id': 'main', 'data': spots},
                      {'Prefer': 'resolution=merge-duplicates'})
