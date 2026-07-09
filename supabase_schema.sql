@@ -10,10 +10,10 @@ CREATE TABLE IF NOT EXISTS spots (
 
 ALTER TABLE spots ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "spots_select" ON spots FOR SELECT USING (true);
-CREATE POLICY IF NOT EXISTS "spots_insert" ON spots FOR INSERT WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "spots_update" ON spots FOR UPDATE USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "spots_delete" ON spots FOR DELETE USING (true);
+CREATE POLICY "spots_select" ON spots FOR SELECT USING (true);
+CREATE POLICY "spots_insert" ON spots FOR INSERT WITH CHECK (true);
+CREATE POLICY "spots_update" ON spots FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "spots_delete" ON spots FOR DELETE USING (true);
 
 -- ─── intro テーブル（案内メッセージ） ───
 CREATE TABLE IF NOT EXISTS intro (
@@ -24,9 +24,9 @@ CREATE TABLE IF NOT EXISTS intro (
 
 ALTER TABLE intro ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "intro_select" ON intro FOR SELECT USING (true);
-CREATE POLICY IF NOT EXISTS "intro_insert" ON intro FOR INSERT WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "intro_update" ON intro FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "intro_select" ON intro FOR SELECT USING (true);
+CREATE POLICY "intro_insert" ON intro FOR INSERT WITH CHECK (true);
+CREATE POLICY "intro_update" ON intro FOR UPDATE USING (true) WITH CHECK (true);
 
 -- ─── analytics テーブル（閲覧ログ） ───
 CREATE TABLE IF NOT EXISTS analytics (
@@ -37,9 +37,9 @@ CREATE TABLE IF NOT EXISTS analytics (
 
 ALTER TABLE analytics ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "analytics_select" ON analytics FOR SELECT USING (true);
-CREATE POLICY IF NOT EXISTS "analytics_insert" ON analytics FOR INSERT WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "analytics_update" ON analytics FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "analytics_select" ON analytics FOR SELECT USING (true);
+CREATE POLICY "analytics_insert" ON analytics FOR INSERT WITH CHECK (true);
+CREATE POLICY "analytics_update" ON analytics FOR UPDATE USING (true) WITH CHECK (true);
 
 -- ─── tracks テーブル（GPS軌跡） ───
 CREATE TABLE IF NOT EXISTS tracks (
@@ -50,9 +50,9 @@ CREATE TABLE IF NOT EXISTS tracks (
 
 ALTER TABLE tracks ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "tracks_select" ON tracks FOR SELECT USING (true);
-CREATE POLICY IF NOT EXISTS "tracks_insert" ON tracks FOR INSERT WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "tracks_update" ON tracks FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "tracks_select" ON tracks FOR SELECT USING (true);
+CREATE POLICY "tracks_insert" ON tracks FOR INSERT WITH CHECK (true);
+CREATE POLICY "tracks_update" ON tracks FOR UPDATE USING (true) WITH CHECK (true);
 
 -- ─── pathways テーブル（通路・順路データ） ───
 CREATE TABLE IF NOT EXISTS pathways (
@@ -64,6 +64,6 @@ CREATE TABLE IF NOT EXISTS pathways (
 
 ALTER TABLE pathways ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "pathways_select" ON pathways FOR SELECT USING (true);
-CREATE POLICY IF NOT EXISTS "pathways_insert" ON pathways FOR INSERT WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "pathways_delete" ON pathways FOR DELETE USING (true);
+CREATE POLICY "pathways_select" ON pathways FOR SELECT USING (true);
+CREATE POLICY "pathways_insert" ON pathways FOR INSERT WITH CHECK (true);
+CREATE POLICY "pathways_delete" ON pathways FOR DELETE USING (true);
