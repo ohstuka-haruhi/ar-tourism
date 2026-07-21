@@ -645,9 +645,48 @@
       padding: 10px 14px; color: #444; font-size: 12px;
       outline: none; margin-bottom: 18px; word-break: break-all;
     }
+    /* ── 現地チェックイン制限オーバーレイ ── */
+    #loc-check {
+      display: flex; position: fixed; inset: 0; z-index: 99999;
+      background: #f0f4f8;
+      align-items: center; justify-content: center;
+    }
+    #loc-check.hidden { display: none; }
+    #loc-check-card {
+      background: #fff; border-radius: 24px; padding: 36px 28px;
+      max-width: 320px; width: 90%; text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+    }
+    #loc-check-icon { font-size: 56px; margin-bottom: 16px; line-height: 1; }
+    #loc-check-msg  { font-size: 17px; font-weight: 800; color: #1a1a2e; margin-bottom: 10px; }
+    #loc-check-sub  { font-size: 13px; color: #666; line-height: 1.7; white-space: pre-line; }
+    #loc-retry-btn  {
+      display: none; margin-top: 22px;
+      padding: 11px 32px; border-radius: 24px;
+      background: var(--accent); color: #fff; border: none;
+      font-size: 14px; font-weight: 700; cursor: pointer;
+    }
+
+    /* ── 思い出リンク ── */
+    #memories-link {
+      font-size: 17px; text-decoration: none; color: #1a1a2e;
+      width: 30px; height: 30px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.06);
+    }
   </style>
 </head>
 <body>
+
+<!-- ── 現地チェックイン制限 ── -->
+<div id="loc-check">
+  <div id="loc-check-card">
+    <div id="loc-check-icon">🗺️</div>
+    <div id="loc-check-msg">現在地を確認しています…</div>
+    <div id="loc-check-sub">しばらくお待ちください</div>
+    <button id="loc-retry-btn" onclick="location.reload()">再試行</button>
+  </div>
+</div>
 
 <!-- ── AR Scene ── -->
 <a-scene id="ar-scene"
@@ -706,6 +745,7 @@
   <div id="top-bar">
     <span id="app-title">⛩ ナビゲーションAR</span>
     <div id="top-right">
+      <a id="memories-link" href="memories.html" title="思い出を振り返る">📸</a>
       <button id="list-btn" onclick="toggleFallback(true)">☰ List</button>
       <div id="lang-switcher">
         <select id="lang-select" onchange="setLang(this.value)">
@@ -2719,6 +2759,60 @@ const Vision = (() => {
 })();
 
 // ─────────────────────────────────────────────────────────
+//  現地チェックイン（羽黒山エリア 5km 圏内のみ起動）
+// ─────────────────────────────────────────────────────────
+const AREA_CENTER   = { lat: 38.720, lng: 139.973 };
+const AREA_RADIUS_M = 5000;
+
+function setLocCheckState(state) {
+  const icon = document.getElementById('loc-check-icon');
+  const msg  = document.getElementById('loc-check-msg');
+  const sub  = document.getElementById('loc-check-sub');
+  const btn  = document.getElementById('loc-retry-btn');
+  if (state === 'outside') {
+    icon.textContent = '📍';
+    msg.textContent  = '現地でのみご利用いただけます';
+    sub.textContent  = 'このアプリは羽黒山エリア（半径5km）\nでのみご利用いただけます。';
+    btn.style.display = '';
+  } else if (state === 'denied') {
+    icon.textContent = '⚠️';
+    msg.textContent  = '位置情報の許可が必要です';
+    sub.textContent  = 'ブラウザの設定で位置情報を許可してから\n再試行してください。';
+    btn.style.display = '';
+  }
+}
+
+async function checkLocationAccess() {
+  // ?debug=1 で制限をスキップ（開発・テスト用）
+  if (new URLSearchParams(location.search).get('debug') === '1') {
+    document.getElementById('loc-check').classList.add('hidden');
+    return true;
+  }
+  return new Promise(resolve => {
+    if (!('geolocation' in navigator)) {
+      setLocCheckState('denied');
+      resolve(false);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const d = haversine(pos.coords.latitude, pos.coords.longitude,
+                            AREA_CENTER.lat, AREA_CENTER.lng);
+        if (d <= AREA_RADIUS_M) {
+          document.getElementById('loc-check').classList.add('hidden');
+          resolve(true);
+        } else {
+          setLocCheckState('outside');
+          resolve(false);
+        }
+      },
+      () => { setLocCheckState('denied'); resolve(false); },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+    );
+  });
+}
+
+// ─────────────────────────────────────────────────────────
 //  Boot
 // ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -2728,8 +2822,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (lang === 'ar' || lang === 'ur') document.body.dir = 'rtl';
   document.getElementById('nearby-label').textContent = t('nearby');
 
+  // 現地チェック（エリア外なら起動しない）
+  const inArea = await checkLocationAccess();
+  if (!inArea) return;
+
   Analytics.init();
   GpsTracker.init();
+
+  // 思い出リンクにセッションIDをセット
+  const memoriesLink = document.getElementById('memories-link');
+  if (memoriesLink) memoriesLink.href = `memories.html?session=${Analytics.SESSION_ID}`;
   await Promise.all([loadSpots(), loadIntroConfig()]);
   refreshChips();
   updateRouteProgress();

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>思い出の振り返り</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root { --accent: #4fc3f7; --accent-dark: #0288d1; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f0f4f8; color: #1a1a2e; min-height: 100vh;
+    }
+
+    #header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px 12px;
+      background: #fff;
+      border-bottom: 1px solid #eee;
+      position: sticky; top: 0; z-index: 100;
+    }
+    #back-btn {
+      font-size: 22px; text-decoration: none; color: #1a1a2e;
+      width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+      border-radius: 50%; background: rgba(0,0,0,0.06);
+    }
+    #header h1 { font-size: 17px; font-weight: 800; }
+
+    .card {
+      background: #fff; border-radius: 16px;
+      margin: 12px 12px 0; padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .card:last-child { margin-bottom: 24px; }
+    .card-title {
+      font-size: 11px; font-weight: 700; color: var(--accent-dark);
+      text-transform: uppercase; letter-spacing: 0.1em;
+      margin-bottom: 12px;
+    }
+
+    #session-date { font-size: 14px; color: #555; margin-bottom: 14px; }
+
+    .stats-row { display: flex; }
+    .stat-item {
+      flex: 1; text-align: center; padding: 6px 4px;
+      border-right: 1px solid #f0f0f0;
+    }
+    .stat-item:last-child { border-right: none; }
+    .stat-num   { font-size: 24px; font-weight: 800; color: var(--accent-dark); }
+    .stat-label { font-size: 10px; color: #888; margin-top: 3px; }
+
+    #track-map {
+      height: 260px; border-radius: 12px; overflow: hidden;
+      background: #e8f4f8;
+    }
+
+    .spot-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 0; border-bottom: 1px solid #f5f5f5;
+    }
+    .spot-item:last-child { border-bottom: none; }
+    .spot-icon {
+      width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .spot-name { font-size: 14px; font-weight: 600; }
+    .spot-time { font-size: 11px; color: #888; margin-top: 3px; }
+
+    #loading {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 60vh; gap: 14px; color: #999; font-size: 14px;
+    }
+    #loading-spinner {
+      width: 38px; height: 38px; border: 3px solid #e0e0e0;
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #error-msg {
+      display: none; text-align: center; padding: 60px 28px;
+    }
+    #error-msg .err-icon { font-size: 48px; margin-bottom: 16px; }
+    #error-msg h2 { font-size: 17px; font-weight: 700; color: #444; margin-bottom: 8px; }
+    #error-msg p  { font-size: 13px; color: #888; line-height: 1.6; }
+
+    .no-data { text-align: center; padding: 24px 0; color: #aaa; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <a href="javascript:history.back()" id="back-btn">←</a>
+  <h1>📸 思い出の振り返り</h1>
+</div>
+
+<div id="loading">
+  <div id="loading-spinner"></div>
+  <span>データを読み込み中…</span>
+</div>
+
+<div id="main" style="display:none">
+  <!-- セッション情報 -->
+  <div class="card">
+    <div class="card-title">📅 セッション情報</div>
+    <div id="session-date"></div>
+    <div class="stats-row">
+      <div class="stat-item">
+        <div class="stat-num" id="stat-duration">—</div>
+        <div class="stat-label">滞在時間</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num" id="stat-spots">—</div>
+        <div class="stat-label">訪問スポット</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num" id="stat-points">—</div>
+        <div class="stat-label">GPS記録</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 歩いた経路 -->
+  <div class="card">
+    <div class="card-title">🗺️ 歩いた経路</div>
+    <div id="track-map"></div>
+  </div>
+
+  <!-- 訪問したスポット -->
+  <div class="card">
+    <div class="card-title">📍 訪問したスポット</div>
+    <div id="spots-list"><div class="no-data">スポット訪問データなし</div></div>
+  </div>
+</div>
+
+<div id="error-msg">
+  <div class="err-icon">🔍</div>
+  <h2>データが見つかりません</h2>
+  <p>このセッションのデータはまだ送信されていないか、<br>存在しません。</p>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://pjcbjkjzxzwbxwmrebud.supabase.co';
+const SUPABASE_KEY = 'sb_publishable__yZXAucrH0PmJkCdDYX7dA_gpGyRedn';
+const SB_HEADERS   = {
+  'apikey':        SUPABASE_KEY,
+  'Authorization': `Bearer ${SUPABASE_KEY}`
+};
+
+const CAT_ICON  = { heritage:'⛩', nature:'🌿', facility:'🏛', shop:'🛍', signage:'🪧' };
+const CAT_COLOR = { heritage:'#8B5CF6', nature:'#10B981', facility:'#3B82F6', shop:'#F59E0B', signage:'#6B7280' };
+
+function fmtDuration(startIso, endIso) {
+  const secs = Math.max(0, Math.round((new Date(endIso) - new Date(startIso)) / 1000));
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  if (h > 0) return `${h}時間${m}分`;
+  if (m > 0) return `${m}分`;
+  return `${secs}秒`;
+}
+
+function fmtTime(iso) {
+  return new Date(iso).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtDate(iso) {
+  return new Date(iso).toLocaleDateString('ja-JP',
+    { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+}
+
+async function loadData(sessionId) {
+  const sid = encodeURIComponent(sessionId);
+  const [aRes, tRes, sRes] = await Promise.all([
+    fetch(`${SUPABASE_URL}/rest/v1/analytics?id=eq.${sid}&select=data`, { headers: SB_HEADERS }),
+    fetch(`${SUPABASE_URL}/rest/v1/tracks?id=eq.${sid}&select=data`,    { headers: SB_HEADERS }),
+    fetch('spots.json')
+  ]);
+  const analyticsRows = aRes.ok ? await aRes.json() : [];
+  const tracksRows    = tRes.ok ? await tRes.json() : [];
+  const spots         = sRes.ok ? await sRes.json() : [];
+  return {
+    analytics: analyticsRows[0]?.data || null,
+    track:     tracksRows[0]?.data    || null,
+    spots
+  };
+}
+
+function renderStats(analytics, track) {
+  if (analytics?.startTime) {
+    document.getElementById('session-date').textContent = fmtDate(analytics.startTime);
+  }
+  if (analytics?.startTime && analytics?.endTime) {
+    document.getElementById('stat-duration').textContent = fmtDuration(analytics.startTime, analytics.endTime);
+  }
+  const approaches = (analytics?.events || []).filter(e => e.type === 'spot_approach');
+  document.getElementById('stat-spots').textContent  = approaches.length;
+  document.getElementById('stat-points').textContent = (track?.points || []).length;
+}
+
+function renderMap(track) {
+  const map = L.map('track-map', {
+    zoomControl: true, attributionControl: false,
+    dragging: true, scrollWheelZoom: false
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+  const pts = (track?.points || []).map(p => [p.lat, p.lng]);
+  if (pts.length >= 2) {
+    const poly = L.polyline(pts, { color: '#4fc3f7', weight: 4, opacity: 0.9 }).addTo(map);
+    L.circleMarker(pts[0], {
+      radius: 8, fillColor: '#10b981', color: '#fff', weight: 2.5, fillOpacity: 1
+    }).bindPopup('スタート').addTo(map);
+    L.circleMarker(pts[pts.length - 1], {
+      radius: 8, fillColor: '#ef4444', color: '#fff', weight: 2.5, fillOpacity: 1
+    }).bindPopup('ゴール').addTo(map);
+    map.fitBounds(poly.getBounds(), { padding: [20, 20] });
+  } else if (pts.length === 1) {
+    map.setView(pts[0], 16);
+    L.circleMarker(pts[0], {
+      radius: 8, fillColor: '#4fc3f7', color: '#fff', weight: 2.5, fillOpacity: 1
+    }).addTo(map);
+  } else {
+    map.setView([38.720, 139.973], 14);
+    document.getElementById('track-map').insertAdjacentHTML('beforeend',
+      '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:999;background:rgba(255,255,255,0.9);padding:8px 16px;border-radius:8px;font-size:13px;color:#888;pointer-events:none">GPS記録なし</div>');
+  }
+}
+
+function renderSpots(analytics, spots) {
+  const approaches = (analytics?.events || [])
+    .filter(e => e.type === 'spot_approach')
+    .sort((a, b) => new Date(a.t) - new Date(b.t));
+  if (!approaches.length) return;
+
+  const list = document.getElementById('spots-list');
+  list.innerHTML = '';
+  approaches.forEach(ev => {
+    const spot  = spots.find(s => s.id === ev.spotId);
+    const name  = spot ? (spot.name.jp || spot.name.en || ev.spotId) : ev.spotId;
+    const cat   = spot?.category || 'facility';
+    const icon  = CAT_ICON[cat]  || '📍';
+    const color = CAT_COLOR[cat] || '#6B7280';
+    const item  = document.createElement('div');
+    item.className = 'spot-item';
+    item.innerHTML = `
+      <div class="spot-icon" style="background:${color}22">${icon}</div>
+      <div>
+        <div class="spot-name">${name}</div>
+        <div class="spot-time">🕐 ${fmtTime(ev.t)}${ev.dist != null ? ' ・ ' + Math.round(ev.dist) + 'm付近' : ''}</div>
+      </div>`;
+    list.appendChild(item);
+  });
+}
+
+async function main() {
+  const sessionId = new URLSearchParams(location.search).get('session');
+  if (!sessionId) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error-msg').querySelector('p').textContent =
+      'URLにセッションIDが含まれていません。ARアプリの📸ボタンから開いてください。';
+    document.getElementById('error-msg').style.display = 'block';
+    return;
+  }
+
+  try {
+    const { analytics, track, spots } = await loadData(sessionId);
+    if (!analytics && !track) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error-msg').style.display = 'block';
+      return;
+    }
+    renderStats(analytics, track);
+    renderMap(track);
+    renderSpots(analytics, spots);
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('main').style.display    = '';
+  } catch(e) {
+    console.error(e);
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error-msg').querySelector('h2').textContent = '読み込みエラー';
+    document.getElementById('error-msg').querySelector('p').textContent  = e.message;
+    document.getElementById('error-msg').style.display = 'block';
+  }
+}
+
+main();
+</script>
+</body>
+</html>
