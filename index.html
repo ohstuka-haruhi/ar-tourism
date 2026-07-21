@@ -1839,7 +1839,7 @@ function renderAROverlay() {
     const brg      = bearingTo(userPos.lat, userPos.lng, spot.lat, spot.lng);
     const rel      = normAngle(brg - compassHeading); // -180..+180
     const inView   = Math.abs(rel) < halfFov;
-    const inRadius = dist <= (spot.radius || 50);
+    const inRadius = dist <= 10;  // 吹き出しは10m以内のみ表示
     const screenX  = W / 2 + (rel / halfFov) * (W / 2);
     return { spot, dist, rel, inView, inRadius, screenX };
   });
