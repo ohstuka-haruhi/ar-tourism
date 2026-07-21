@@ -194,29 +194,34 @@
     /* ── Navigation minimap ── */
     #nav-minimap-wrap {
       display: none; position: fixed;
-      bottom: 170px; right: 12px; z-index: 9998;
+      bottom: 0; left: 0; right: 0; z-index: 9998;
+      background: #fff; border-radius: 16px 16px 0 0;
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.18);
     }
-    #nav-minimap-wrap.show { display: block; }
+    #nav-minimap-wrap.show { display: flex; flex-direction: column; }
+    #nav-minimap-header {
+      display: flex; align-items: center;
+      padding: 10px 14px 8px; gap: 10px;
+    }
+    #nav-minimap-title {
+      flex: 1; font-size: 14px; font-weight: 700; color: #1a1a2e;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
     #nav-minimap {
-      width: 120px; height: 120px; border-radius: 50%; overflow: hidden;
-      /* border set dynamically (category color) */
-      box-shadow: 0 0 0 3px #fff, 0 4px 18px rgba(0,0,0,0.3);
+      width: 100%; height: 200px; overflow: hidden;
     }
     #nav-minimap-cancel {
-      position: absolute; top: -5px; right: -5px;
-      width: 22px; height: 22px; border-radius: 50%;
-      background: #fff; border: 1.5px solid #e0e0e0;
-      font-size: 11px; cursor: pointer; z-index: 1;
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.22); color: #555;
+      padding: 5px 14px; border-radius: 20px;
+      background: rgba(0,0,0,0.07); border: none;
+      font-size: 12px; font-weight: 600; cursor: pointer; color: #555;
+      white-space: nowrap; flex-shrink: 0;
     }
     #nav-minimap-arrive {
-      display: none; position: absolute; top: 0; left: 0;
-      width: 120px; height: 120px; border-radius: 50%;
+      display: none; position: absolute;
+      top: 44px; left: 0; right: 0; height: 200px;
       background: rgba(255,255,255,0.92); z-index: 2;
       align-items: center; justify-content: center;
-      flex-direction: column; text-align: center;
-      font-size: 26px;
+      flex-direction: column; text-align: center; font-size: 26px;
     }
     #nav-minimap-arrive.show { display: flex; }
 
@@ -753,8 +758,11 @@
 
 <!-- ── Navigation minimap ── -->
 <div id="nav-minimap-wrap">
+  <div id="nav-minimap-header">
+    <span id="nav-minimap-title"></span>
+    <button id="nav-minimap-cancel" onclick="cancelNavigation()" aria-label="ナビ終了">✕ ナビ終了</button>
+  </div>
   <div id="nav-minimap"></div>
-  <button id="nav-minimap-cancel" onclick="cancelNavigation()" aria-label="ナビキャンセル">✕</button>
   <div id="nav-minimap-arrive"></div>
 </div>
 
@@ -1349,6 +1357,7 @@ function handleModalBg(e) {
 // ── Navigation ────────────────────────────────────────────
 let _miniMap          = null;
 let _miniMapPosMarker = null;
+let _navPathways      = null;  // session cache for pathway data
 
 function triggerNavigation() {
   const spot = window._activeSpot;
@@ -1456,45 +1465,72 @@ function updateRouteNav() {
   if (dist <= 50) advanceRoute();
 }
 
-function initMiniMap(spot) {
+async function initMiniMap(spot) {
   const wrap      = document.getElementById('nav-minimap-wrap');
   const container = document.getElementById('nav-minimap');
   if (_miniMap) { _miniMap.remove(); _miniMap = null; }
   _miniMapPosMarker = null;
 
+  // ヘッダータイトル
+  const titleEl = document.getElementById('nav-minimap-title');
+  if (titleEl) {
+    const catIcon = CAT_ICON_MAP[spot.category] || '📍';
+    titleEl.textContent = `${catIcon} ${spot.name[lang] || spot.name.jp || spot.name.en || ''}`;
+  }
+
   const color = primaryCatColor(spot);
-  container.style.border = `3px solid ${color}`;
+  wrap.style.borderTop = `4px solid ${color}`;
 
   _miniMap = L.map(container, {
     zoomControl: false, attributionControl: false,
-    dragging: false, scrollWheelZoom: false,
+    dragging: true, scrollWheelZoom: false,
     doubleClickZoom: false, boxZoom: false, keyboard: false
   });
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 18
-  }).addTo(_miniMap);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(_miniMap);
 
-  // スポットマーカー（カテゴリアイコン）
+  // 目的スポットマーカー
   const icon = CAT_ICON_MAP[spot.category] || '📍';
   const spotIcon = L.divIcon({
     className: '',
-    html: `<div style="width:24px;height:24px;border-radius:50%;
+    html: `<div style="width:28px;height:28px;border-radius:50%;
       background:${color};border:2px solid #fff;
       display:flex;align-items:center;justify-content:center;
-      font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${icon}</div>`,
-    iconSize: [24, 24], iconAnchor: [12, 12]
+      font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,0.35)">${icon}</div>`,
+    iconSize: [28, 28], iconAnchor: [14, 14]
   });
   L.marker([spot.lat, spot.lng], { icon: spotIcon }).addTo(_miniMap);
 
-  const bounds = [[spot.lat, spot.lng]];
+  // 地図を先に表示
+  wrap.classList.add('show');
+  setTimeout(() => _miniMap && _miniMap.invalidateSize(), 80);
 
+  // 現在地マーカー
+  const bounds = [[spot.lat, spot.lng]];
   if (userPos) {
     _miniMapPosMarker = L.circleMarker([userPos.lat, userPos.lng], {
-      radius: 5, fillColor: '#2563eb', color: '#fff', weight: 2, fillOpacity: 1
+      radius: 6, fillColor: '#2563eb', color: '#fff', weight: 2, fillOpacity: 1
     }).addTo(_miniMap);
     bounds.push([userPos.lat, userPos.lng]);
+  }
 
-    // OSRM ルート取得（失敗時は直線フォールバック）
+  // Supabase pathways を優先、なければ OSRM、さらに失敗なら直線
+  const pathways = await loadNavPathways();
+  const bestPw   = findBestPathway(pathways, spot);
+
+  if (bestPw) {
+    const pts = bestPw.points || bestPw.pathway || [];
+    if (pts.length >= 2) {
+      const coords = pts.map(p => [p.lat, p.lng]);
+      L.polyline(coords, { color, weight: 4, opacity: 0.85 }).addTo(_miniMap);
+      const allBounds = L.latLngBounds(coords);
+      if (userPos) allBounds.extend([userPos.lat, userPos.lng]);
+      _miniMap.fitBounds(allBounds, { padding: [16, 16] });
+      return;
+    }
+  }
+
+  // OSRM フォールバック（失敗時は直線）
+  if (userPos) {
     const osrmUrl =
       `https://router.project-osrm.org/route/v1/foot/` +
       `${userPos.lng},${userPos.lat};${spot.lng},${spot.lat}` +
@@ -1506,21 +1542,18 @@ function initMiniMap(spot) {
         if (!geom || !_miniMap) return;
         L.geoJSON(geom, { style: { color, weight: 3, opacity: 0.8 } }).addTo(_miniMap);
         const ll = geom.coordinates.map(([lng, lat]) => [lat, lng]);
-        _miniMap.fitBounds(L.polyline(ll).getBounds(), { padding: [10, 10] });
+        _miniMap.fitBounds(L.polyline(ll).getBounds(), { padding: [16, 16] });
       })
       .catch(() => {
         if (!_miniMap) return;
         L.polyline([[userPos.lat, userPos.lng], [spot.lat, spot.lng]],
           { color, weight: 2, dashArray: '5 4', opacity: 0.75 }
         ).addTo(_miniMap);
-        _miniMap.fitBounds(bounds, { padding: [10, 10] });
+        _miniMap.fitBounds(L.latLngBounds(bounds), { padding: [16, 16] });
       });
   } else {
     _miniMap.setView([spot.lat, spot.lng], 15);
   }
-
-  _miniMap.invalidateSize();
-  wrap.classList.add('show');
 }
 
 function updateMiniMapPos() {
@@ -1547,6 +1580,41 @@ function updateMiniMapPos() {
       setTimeout(() => cancelNavigation(), 3000);
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Pathway helpers for nav map
+// ─────────────────────────────────────────────────────────
+async function loadNavPathways() {
+  if (_navPathways !== null) return _navPathways;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/pathways?select=*&order=created_at.asc`,
+      { headers: SB_HEADERS }
+    );
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const rows = await r.json();
+    _navPathways = rows.map(row => ({ ...(row.points || {}), id: row.id }));
+  } catch(e) {
+    console.warn('Pathways load failed:', e);
+    _navPathways = [];
+  }
+  return _navPathways;
+}
+
+function findBestPathway(pathways, spot) {
+  let bestPw = null, bestDist = Infinity;
+  pathways.forEach(pw => {
+    // 完全一致：訪問スポットIDに含まれている
+    if ((pw.spotsVisited || []).includes(spot.id)) { bestPw = pw; bestDist = 0; return; }
+    // 地理的近傍：経路上の最近点がスポットに近い
+    const pts = pw.points || pw.pathway || [];
+    pts.forEach(p => {
+      const d = haversine(p.lat, p.lng, spot.lat, spot.lng);
+      if (d < bestDist) { bestDist = d; bestPw = pw; }
+    });
+  });
+  return (bestDist <= 300 && bestPw) ? bestPw : null;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1894,8 +1962,9 @@ function renderAROverlay() {
     let el = overlay.querySelector(`.ar-callout[data-id="${d.spot.id}"]`);
     if (!el) { el = buildCalloutEl(d.spot); overlay.appendChild(el); }
     const cx = Math.max(BUBBLE_W / 2 + 6, Math.min(W - BUBBLE_W / 2 - 6, d.screenX));
-    el.style.left = `${cx}px`;
-    el.style.top  = `${d.finalY}px`;
+    el.style.left    = `${cx}px`;
+    el.style.top     = `${d.finalY}px`;
+    el.style.opacity = (isNavigating && navSpot && d.spot.id !== navSpot.id) ? '0.5' : '';
     refreshCallout(el, d.spot, d.dist);
   });
 
@@ -1908,7 +1977,15 @@ function renderAROverlay() {
     group.forEach((d, i) => {
       let el = overlay.querySelector(`.ar-edge[data-id="${d.spot.id}"]`);
       if (!el) { el = buildEdgeEl(d.spot, side); overlay.appendChild(el); }
-      const color = primaryCatColor(d.spot);
+
+      // ナビ強調・控えめ
+      const isTarget = isNavigating && navSpot && d.spot.id === navSpot.id;
+      const isOther  = isNavigating && navSpot && d.spot.id !== navSpot.id;
+      const color    = isTarget ? '#f97316' : isOther ? '#9ca3af' : primaryCatColor(d.spot);
+      el.style.opacity      = isOther ? '0.5' : '';
+      el.style.transform    = isTarget ? 'scale(1.5)' : isOther ? 'scale(0.7)' : '';
+      el.style.transformOrigin = 'center center';
+
       el.className   = `ar-edge side-${side}`;
       el.style.top   = `${startY + i * (EDGE_H + EDGE_GAP)}px`;
       // 3D arrow body: gradient fades toward tip (far end)
@@ -1939,10 +2016,21 @@ function updateFrontIndicator(d) {
   const el = document.getElementById('front-indicator');
   if (!d) {
     el.classList.remove('visible');
+    el.style.transform = '';
+    el.style.opacity   = '';
     return;
   }
-  const color = primaryCatColor(d.spot);
-  // 3D arrow: gradient from transparent (far/top) to solid color (near/bottom)
+
+  // ナビ中：ターゲット強調（オレンジ1.5倍） / 他は控えめ（グレー0.7倍 50%透明）
+  const isTarget = isNavigating && navSpot && d.spot.id === navSpot.id;
+  const isOther  = isNavigating && navSpot && d.spot.id !== navSpot.id;
+  const color    = isTarget ? '#f97316' : isOther ? '#9ca3af' : primaryCatColor(d.spot);
+
+  el.style.transform    = isTarget ? 'translateX(-50%) scale(1.5)' :
+                          isOther  ? 'translateX(-50%) scale(0.7)' : '';
+  el.style.opacity      = isOther ? '0.5' : '';
+  el.style.transformOrigin = 'center bottom';
+
   const body = el.querySelector('.nav-arrow-body');
   if (body) {
     body.style.background =
@@ -2291,8 +2379,9 @@ async function savePathway() {
       })
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
-    activePathway = pathwayPoints.slice();
-    pathwayPoints = [];
+    activePathway  = pathwayPoints.slice();
+    pathwayPoints  = [];
+    _navPathways   = null;  // キャッシュをクリア（次回ナビで最新データを取得）
     document.getElementById('pathway-clear-btn').style.display = 'block';
     document.getElementById('route-modal').classList.remove('open');
     scheduleOverlay();
