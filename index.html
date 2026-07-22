@@ -1763,12 +1763,101 @@ function retryAR() {
 }
 
 // ─────────────────────────────────────────────────────────
+//  テストモード（本物のGPSの代わりに「にせの現在地」を使う）
+//    ?mock=<スポットID>    … 現在地をそのスポットに固定
+//    ?mock=<緯度>,<経度>   … 現在地を指定した座標に固定
+//    ?play=<順路ID>        … routes.json の順路を自動で歩いて再生
+//    ?speed=<倍率>         … 再生の速さ（省略時は1倍）
+// ─────────────────────────────────────────────────────────
+const _testParams = new URLSearchParams(location.search);
+const TEST_MODE   = _testParams.has('mock') || _testParams.has('play');
+
+// 現在地の更新は必ずこの1か所を通る（本物のGPS・固定・再生で共通の入り口）
+function applyPosition(lat, lng, accuracy) {
+  userPos = { lat, lng };
+  updateMiniMapPos();
+  updateRouteNav();
+  checkIntroTrigger();
+  refreshChips();
+  scheduleOverlay();
+  if (document.getElementById('fallback').classList.contains('show')) refreshFallbackList();
+}
+
+// ?mock= の値を「スポットID」または「緯度,経度」として座標に変換する
+function resolveMockPoint(mock) {
+  if (mock.includes(',')) {
+    const [lat, lng] = mock.split(',').map(Number);
+    return (isFinite(lat) && isFinite(lng)) ? { lat, lng } : null;
+  }
+  const s = spots.find(x => x.id === mock);
+  return s ? { lat: s.lat, lng: s.lng } : null;
+}
+
+let _playTimer = null;
+
+// ?play= の順路を routes.json から読み込み、点と点の間を補間しながら自動で進む
+function startPlayback(routeId) {
+  fetch('routes.json')
+    .then(r => r.json())
+    .then(routes => {
+      const route = routes.find(r => r.id === routeId) || routes[0];
+      const pts   = (route && route.points) ? route.points : [];
+      if (pts.length === 0) return;
+      applyPosition(pts[0].lat, pts[0].lng, 5);   // まず出発点に立つ
+      if (pts.length === 1) return;
+
+      const speed   = Number(_testParams.get('speed')) || 1;
+      const STEP_MS = 1000;                        // 1秒ごとに位置を更新
+      const t0      = pts[0].t;
+      const totalMs = pts[pts.length - 1].t - t0;  // 記録全体の所要時間
+      let elapsed   = 0;
+
+      _playTimer = setInterval(() => {
+        elapsed += STEP_MS * speed;
+        if (elapsed >= totalMs) {                  // 終点に着いたら停止
+          const last = pts[pts.length - 1];
+          applyPosition(last.lat, last.lng, 5);
+          clearInterval(_playTimer);
+          _playTimer = null;
+          return;
+        }
+        const now = t0 + elapsed;
+        let i = 1;
+        while (i < pts.length && pts[i].t < now) i++;  // 今いる区間を探す
+        const a = pts[i - 1], b = pts[i];
+        const span = (b.t - a.t) || 1;
+        const f    = (now - a.t) / span;               // 区間内の進み具合(0〜1)
+        applyPosition(a.lat + (b.lat - a.lat) * f,
+                      a.lng + (b.lng - a.lng) * f, 5);
+      }, STEP_MS);
+    })
+    .catch(() => {});
+}
+
+// テストモードの起動（本物のGPSは使わず、固定 or 再生で現在地を供給）
+function startMockLocation(badge) {
+  badge.textContent = '🧪 TEST';
+  badge.className   = 'ok';
+  const mock = _testParams.get('mock');
+  const play = _testParams.get('play');
+  if (mock) {
+    const p = resolveMockPoint(mock);
+    if (p) applyPosition(p.lat, p.lng, 5);
+  } else if (play) {
+    startPlayback(play);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
 //  GPS
 // ─────────────────────────────────────────────────────────
 function startGPS() {
   const badge = document.getElementById('gps-badge');
   badge.textContent = t('gpsWait');
   badge.className   = '';
+
+  // テストモードのときは本物のGPSを使わず、にせの現在地を供給する
+  if (TEST_MODE) { startMockLocation(badge); return; }
 
   if (!('geolocation' in navigator)) {
     badge.textContent = t('gpsError');
@@ -1778,16 +1867,10 @@ function startGPS() {
 
   gpsWatchId = navigator.geolocation.watchPosition(
     pos => {
-      userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       badge.textContent = t('gpsOk')(pos.coords.accuracy);
       badge.className   = 'ok';
       Analytics.onGPS(pos);
-      updateMiniMapPos();
-      updateRouteNav();
-      checkIntroTrigger();
-      refreshChips();
-      scheduleOverlay();
-      if (document.getElementById('fallback').classList.contains('show')) refreshFallbackList();
+      applyPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
     },
     err => {
       badge.className   = 'err';
@@ -2783,8 +2866,8 @@ function setLocCheckState(state) {
 }
 
 async function checkLocationAccess() {
-  // ?debug=1 で制限をスキップ（開発・テスト用）
-  if (new URLSearchParams(location.search).get('debug') === '1') {
+  // ?debug=1 または テストモード（?mock= / ?play=）では位置制限をスキップ
+  if (_testParams.get('debug') === '1' || TEST_MODE) {
     document.getElementById('loc-check').classList.add('hidden');
     return true;
   }
