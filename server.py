@@ -7,6 +7,8 @@ Usage:
     python3 server.py          # port 8080
     python3 server.py 3000     # custom port
 """
+import base64
+import hmac
 import json
 import os
 import re
@@ -32,6 +34,11 @@ SUPABASE_KEY = os.environ.get(
     'sb_publishable__yZXAucrH0PmJkCdDYX7dA_gpGyRedn'
 )
 
+# ── 管理画面用の認証情報（環境変数のみ。コードに直書きしない）──────
+# 未設定なら管理画面・書き込みAPIは「閉じる」動作になる（下の _guard_admin 参照）
+ADMIN_USER     = os.environ.get('ADMIN_USER')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
+
 
 class Handler(SimpleHTTPRequestHandler):
 
@@ -45,6 +52,51 @@ class Handler(SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.end_headers()
+
+    # ── 管理画面の認証（Basic認証）──────────────────────────────
+    def _admin_configured(self):
+        """ADMIN_USER と ADMIN_PASSWORD の両方が設定されているか。"""
+        return bool(ADMIN_USER) and bool(ADMIN_PASSWORD)
+
+    def _has_valid_admin_auth(self):
+        """リクエストに正しい管理者ユーザー名・パスワードが付いていれば True。"""
+        header = self.headers.get('Authorization', '')
+        if not header.startswith('Basic '):
+            return False
+        try:
+            decoded = base64.b64decode(header[6:]).decode('utf-8')
+        except Exception:
+            return False
+        user, sep, pw = decoded.partition(':')
+        if not sep:
+            return False
+        # タイミング攻撃を避けるため hmac.compare_digest で照合（バイト列で比較）
+        user_ok = hmac.compare_digest(user.encode('utf-8'), ADMIN_USER.encode('utf-8'))
+        pw_ok   = hmac.compare_digest(pw.encode('utf-8'),   ADMIN_PASSWORD.encode('utf-8'))
+        return user_ok and pw_ok
+
+    def _guard_admin(self):
+        """管理画面・書き込みAPIの入口を守る。
+        通過してよければ True。ダメなら適切な応答を返して False。
+        - 認証情報が未設定 → 503 で「閉じる」
+        - 認証が無い/誤り  → 401 でログイン窓を要求
+        """
+        if not self._admin_configured():
+            self.send_response(503)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(
+                '管理機能は現在無効です（ADMIN_USER / ADMIN_PASSWORD が未設定）。'
+                .encode('utf-8'))
+            return False
+        if not self._has_valid_admin_auth():
+            self.send_response(401)
+            self.send_header('WWW-Authenticate', 'Basic realm="Admin", charset="UTF-8"')
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.end_headers()
+            self.wfile.write('管理者認証が必要です。'.encode('utf-8'))
+            return False
+        return True
 
     # ── Supabase REST helper ─────────────────────────────────
     def _sb(self, method, path, body=None, extra=None):
@@ -70,6 +122,11 @@ class Handler(SimpleHTTPRequestHandler):
     # ── GET ──────────────────────────────────────────────────
     def do_GET(self):
         path = self.path.rstrip('/')
+        # 管理画面の表示だけ認証を要求（一般ユーザー画面や各種読み取りは対象外）
+        if urllib.parse.urlsplit(self.path).path.rstrip('/') == '/admin.html':
+            if not self._guard_admin():
+                return
+            return super().do_GET()
         if path == '/analytics':
             self._get_analytics()
         elif path == '/tracks':
@@ -197,6 +254,9 @@ class Handler(SimpleHTTPRequestHandler):
 
     # ── PUT /spots.json | /qr/<id>.png | /compiled/<id>.mind ─
     def do_PUT(self):
+        # PUT は管理者専用の書き込みのみ → すべて認証を要求
+        if not self._guard_admin():
+            return
         if self.path.rstrip('/') == '/' + SPOTS_FILE:
             self._put_spots()
         elif self.path.rstrip('/') == '/intro':
@@ -293,6 +353,9 @@ class Handler(SimpleHTTPRequestHandler):
         elif path == '/api/analyze':
             self._post_analyze()
         elif path == '/' + ROUTES_FILE:
+            # 順路データの保存は管理者専用 → 認証を要求
+            if not self._guard_admin():
+                return
             self._post_route()
         else:
             self.send_response(404)
