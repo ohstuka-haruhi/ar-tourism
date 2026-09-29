@@ -110,32 +110,6 @@
     .chip-dot  { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
     .chip-dist { color: var(--accent-dark); font-size: 11px; }
 
-    /* ── Route nav button / progress bar ── */
-    #route-nav-btn {
-      display: none;
-      width: 100%; margin-bottom: 10px;
-      padding: 10px 16px; border: none; border-radius: 10px;
-      background: var(--accent-dark); color: #fff;
-      font-size: 14px; font-weight: 700; cursor: pointer;
-      align-items: center; justify-content: center; gap: 6px;
-      letter-spacing: 0.02em;
-    }
-    #route-nav-bar {
-      display: none;
-      align-items: center; justify-content: space-between;
-      margin-bottom: 10px;
-      background: var(--accent-dark); color: #fff;
-      border-radius: 10px; padding: 8px 12px;
-      font-size: 13px; font-weight: 600; gap: 8px;
-    }
-    #route-nav-label { flex: 1; }
-    #route-nav-bar button {
-      background: rgba(255,255,255,0.22); border: none;
-      color: #fff; border-radius: 50%; width: 22px; height: 22px;
-      cursor: pointer; font-size: 11px; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-    }
-
     /* ── Modal ── */
     #modal {
       display: none; position: fixed; inset: 0; z-index: 20;
@@ -182,48 +156,6 @@
       height: 200px; border-radius: 12px; overflow: hidden;
       margin-top: 18px; border: 1px solid #e8e8e8;
     }
-    #nav-btn {
-      display: none; width: 100%; margin-top: 14px;
-      padding: 13px; border: none; border-radius: 10px;
-      color: #fff; font-size: 15px; font-weight: 700;
-      cursor: pointer; letter-spacing: 0.02em;
-      transition: opacity 0.15s;
-    }
-    #nav-btn:active { opacity: 0.8; }
-
-    /* ── Navigation minimap ── */
-    #nav-minimap-wrap {
-      display: none; position: fixed;
-      bottom: 0; left: 0; right: 0; z-index: 9998;
-      background: #fff; border-radius: 16px 16px 0 0;
-      box-shadow: 0 -4px 24px rgba(0,0,0,0.18);
-    }
-    #nav-minimap-wrap.show { display: flex; flex-direction: column; }
-    #nav-minimap-header {
-      display: flex; align-items: center;
-      padding: 10px 14px 8px; gap: 10px;
-    }
-    #nav-minimap-title {
-      flex: 1; font-size: 14px; font-weight: 700; color: #1a1a2e;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    #nav-minimap {
-      width: 100%; height: 200px; overflow: hidden;
-    }
-    #nav-minimap-cancel {
-      padding: 5px 14px; border-radius: 20px;
-      background: rgba(0,0,0,0.07); border: none;
-      font-size: 12px; font-weight: 600; cursor: pointer; color: #555;
-      white-space: nowrap; flex-shrink: 0;
-    }
-    #nav-minimap-arrive {
-      display: none; position: absolute;
-      top: 44px; left: 0; right: 0; height: 200px;
-      background: rgba(255,255,255,0.92); z-index: 2;
-      align-items: center; justify-content: center;
-      flex-direction: column; text-align: center; font-size: 26px;
-    }
-    #nav-minimap-arrive.show { display: flex; }
 
     /* ── Fallback / List view ── */
     #fallback {
@@ -391,77 +323,6 @@
     .ar-edge-status { font-size: 6px; flex-shrink: 0; line-height: 1; }
     .ar-edge-dist { font-size: 8px; }
 
-    /* ── Front-facing distance indicator (3D road arrow) ── */
-    #front-indicator {
-      position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
-      z-index: 12; pointer-events: none;
-      display: flex; flex-direction: column; align-items: center; gap: 8px;
-      opacity: 0; transition: opacity 0.3s ease;
-    }
-    #front-indicator.visible { opacity: 1; }
-    #front-indicator.hidden  { opacity: 0; }
-
-    /* 3D perspective arrow wrapper */
-    .nav-3d-wrap {
-      width: 56px; height: 76px; position: relative;
-      filter: drop-shadow(0 10px 18px rgba(0,0,0,0.28));
-    }
-    /* Arrow shape: up-pointing (tip=top, recedes with rotateX; base=bottom, comes forward) */
-    .nav-arrow-body {
-      position: absolute; inset: 0;
-      clip-path: polygon(50% 0%, 88% 46%, 68% 46%, 68% 100%, 32% 100%, 32% 46%, 12% 46%);
-      transform: perspective(180px) rotateX(40deg);
-      transform-origin: center bottom;
-      /* Gradient: faint at top (far) → solid at bottom (near) = depth illusion */
-      background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.08) 55%, rgba(0,0,0,0.0) 100%);
-      transition: background 0.2s ease;
-    }
-    /* Center-stripe highlight (clipped to arrow shape) */
-    .nav-arrow-body::before {
-      content: '';
-      position: absolute;
-      left: 42%; right: 42%;
-      top: 4%; bottom: 56%;
-      background: rgba(255,255,255,0.32);
-      border-radius: 2px;
-    }
-    /* Ground shadow ellipse */
-    .nav-arrow-body::after {
-      content: '';
-      position: absolute;
-      left: 10%; right: 10%; bottom: -6px;
-      height: 10px; border-radius: 50%;
-      background: rgba(0,0,0,0.18);
-      filter: blur(4px);
-    }
-
-    /* Name + distance info pill */
-    .nav-info-pill {
-      background: rgba(255,255,255,0.93);
-      border: 1px solid rgba(0,0,0,0.07);
-      border-radius: 20px; padding: 5px 14px;
-      box-shadow: 0 3px 12px rgba(0,0,0,0.13);
-      display: flex; flex-direction: column; align-items: center; gap: 1px;
-      white-space: nowrap;
-    }
-    .fi-name { font-size: 11px; font-weight: 700; color: #1a1a2e;
-               max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
-    .fi-dist { font-size: 10px; font-weight: 600; }
-
-    /* ── Vision direction arrow (AI) — compact pill, top-right ── */
-    #direction-arrow {
-      position: fixed; top: 72px; right: 14px;
-      z-index: 13; pointer-events: none;
-      display: flex; flex-direction: row; align-items: center; gap: 5px;
-      background: rgba(0,0,0,0.60); backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,0.13);
-      border-radius: 22px; padding: 7px 12px 7px 10px;
-      opacity: 0; transition: opacity 0.35s ease;
-    }
-    #direction-arrow.visible { opacity: 1; }
-    #dir-icon  { font-size: 16px; line-height: 1; }
-    #dir-label { font-size: 10px; color: rgba(255,255,255,0.85); font-weight: 600; white-space: nowrap; }
 
     /* ── Language picker (first-launch) ── */
     #lang-picker {
@@ -538,113 +399,6 @@
     }
     #compass-toast.show { opacity: 1; }
 
-    /* ── Pathway recording button ── */
-    #pathway-btn {
-      position: fixed;
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
-      left: 20px;
-      z-index: 9999;
-      width: 62px; height: 62px; border-radius: 50%;
-      border: 2px solid rgba(255,255,255,0.4);
-      background: #1a6e2e; color: #fff;
-      font-size: 10px; font-weight: 700; letter-spacing: 0.03em;
-      cursor: pointer;
-      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
-      transition: background 0.2s;
-      -webkit-tap-highlight-color: transparent;
-      pointer-events: auto;
-      isolation: isolate;
-    }
-    #pathway-btn.recording {
-      background: #b71c1c;
-      animation: recPulse 1.4s ease-in-out infinite;
-    }
-    #pathway-dot   { font-size: 14px; line-height: 1; }
-    #pathway-label { font-size: 9px; }
-    #pathway-timer { font-size: 9px; font-weight: 400; font-variant-numeric: tabular-nums; }
-    #pathway-clear-btn {
-      position: fixed;
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 166px);
-      left: 20px;
-      z-index: 9999;
-      display: none;
-      background: rgba(255,255,255,0.9); color: #333;
-      border: 1px solid rgba(0,0,0,0.15); border-radius: 20px;
-      font-size: 11px; font-weight: 600; padding: 5px 12px;
-      cursor: pointer; pointer-events: auto;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    }
-
-    /* ── Route recording button ── */
-    #rec-btn {
-      position: fixed;
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
-      right: 20px;
-      z-index: 9999;
-      width: 62px; height: 62px; border-radius: 50%;
-      border: 2px solid rgba(255,255,255,0.4);
-      background: #c62828; color: #fff;
-      font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
-      cursor: pointer;
-      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
-      transition: background 0.2s;
-      -webkit-tap-highlight-color: transparent;
-      pointer-events: auto;
-      isolation: isolate;
-    }
-    #rec-btn.recording {
-      background: #b71c1c;
-      animation: recPulse 1.4s ease-in-out infinite;
-    }
-    @keyframes recPulse {
-      0%,100% { box-shadow: 0 4px 16px rgba(198,40,40,0.45); }
-      50%      { box-shadow: 0 4px 28px rgba(198,40,40,0.9); }
-    }
-    #rec-dot   { font-size: 14px; line-height: 1; }
-    #rec-label { font-size: 10px; }
-    #rec-timer { font-size: 10px; font-weight: 400; font-variant-numeric: tabular-nums; }
-
-    /* ── Route save / share modal ── */
-    #route-modal {
-      display: none; position: fixed; inset: 0; z-index: 30;
-      background: rgba(0,0,0,0.5); backdrop-filter: blur(6px);
-      align-items: center; justify-content: center;
-    }
-    #route-modal.open { display: flex; }
-    #route-card {
-      background: #ffffff;
-      border: 1px solid rgba(79,195,247,0.25);
-      border-radius: 20px; padding: 28px 24px;
-      width: min(90vw, 360px);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-    }
-    #route-card h3 { color: #1a1a2e; font-size: 18px; margin-bottom: 10px; }
-    #route-modal-stats { color: #666; font-size: 13px; margin-bottom: 18px; }
-    #route-name-input {
-      width: 100%; background: #f8f9fa;
-      border: 1px solid #d0d0d0; border-radius: 10px;
-      padding: 12px 14px; color: #1a1a2e; font-size: 16px;
-      outline: none; margin-bottom: 18px;
-    }
-    #route-name-input:focus { border-color: var(--accent); }
-    .route-actions { display: flex; gap: 10px; }
-    .route-btn {
-      flex: 1; padding: 11px; border-radius: 10px;
-      font-size: 14px; font-weight: 600; cursor: pointer; border: none;
-    }
-    .route-btn.primary  { background: var(--accent); color: #fff; }
-    .route-btn.secondary{ background: rgba(0,0,0,0.07); color: #333; }
-    .route-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    #route-saved-name { color: #1a1a2e; font-size: 17px; font-weight: 700; margin-bottom: 6px; }
-    #route-saved-msg  { color: #666; font-size: 13px; margin-bottom: 14px; }
-    #route-share-url {
-      width: 100%; background: #f8f9fa;
-      border: 1px solid #d0d0d0; border-radius: 10px;
-      padding: 10px 14px; color: #444; font-size: 12px;
-      outline: none; margin-bottom: 18px; word-break: break-all;
-    }
     /* ── 現地チェックイン制限オーバーレイ ── */
     #loc-check {
       display: flex; position: fixed; inset: 0; z-index: 99999;
@@ -723,23 +477,6 @@
 
 <div id="compass-toast">🧭 Tap screen to enable compass</div>
 
-<!-- ── Vision direction arrow ── -->
-<div id="direction-arrow" aria-live="polite">
-  <span id="dir-icon">↑</span>
-  <span id="dir-label"></span>
-</div>
-
-<!-- ── Front-facing distance indicator (3D road arrow) ── -->
-<div id="front-indicator" aria-hidden="true">
-  <div class="nav-3d-wrap">
-    <div class="nav-arrow-body"></div>
-  </div>
-  <div class="nav-info-pill">
-    <span class="fi-name"></span>
-    <span class="fi-dist"></span>
-  </div>
-</div>
-
 <!-- ── UI Overlay ── -->
 <div id="ui">
   <div id="top-bar">
@@ -771,11 +508,6 @@
   <div id="gps-badge">GPS: locating…</div>
   <div id="spacer"></div>
   <div id="bottom-panel">
-    <div id="route-nav-bar">
-      <span id="route-nav-label"></span>
-      <button onclick="cancelNavigation()" aria-label="順路ナビ終了">✕</button>
-    </div>
-    <button id="route-nav-btn" onclick="startRouteNav()">▶ 順路ナビ開始</button>
     <div id="nearby-label">Nearby</div>
     <div id="spots-chips"></div>
   </div>
@@ -792,59 +524,6 @@
     <p id="modal-address" style="display:none"></p>
     <p id="modal-desc"></p>
     <div id="modal-map"></div>
-    <button id="nav-btn" onclick="triggerNavigation()">🧭 このスポットに向かう</button>
-  </div>
-</div>
-
-<!-- ── Navigation minimap ── -->
-<div id="nav-minimap-wrap">
-  <div id="nav-minimap-header">
-    <span id="nav-minimap-title"></span>
-    <button id="nav-minimap-cancel" onclick="cancelNavigation()" aria-label="ナビ終了">✕ ナビ終了</button>
-  </div>
-  <div id="nav-minimap"></div>
-  <div id="nav-minimap-arrive"></div>
-</div>
-
-<!-- ── Route recording button ── -->
-<button id="rec-btn" onclick="toggleRecording()" title="Record route">
-  <span id="rec-dot">●</span>
-  <span id="rec-label">REC</span>
-</button>
-
-<!-- ── Pathway recording button ── -->
-<button id="pathway-btn" onclick="togglePathwayRecording()" title="通路を記録">
-  <span id="pathway-dot">🛤</span>
-  <span id="pathway-label">通路</span>
-</button>
-<button id="pathway-clear-btn" onclick="clearPathway()">× 通路を消す</button>
-
-<!-- ── Pathway canvas overlay ── -->
-<canvas id="pathway-canvas" style="position:fixed;inset:0;z-index:9;pointer-events:none;"></canvas>
-
-<!-- ── Route save / share modal ── -->
-<div id="route-modal" onclick="handleRouteModalBg(event)">
-  <div id="route-card">
-    <!-- Step 1: name -->
-    <div id="route-step-name">
-      <h3>Save Route</h3>
-      <p id="route-modal-stats"></p>
-      <input id="route-name-input" type="text" placeholder="My Route" maxlength="60">
-      <div class="route-actions">
-        <button class="route-btn secondary" onclick="cancelRouteSave()">Discard</button>
-        <button class="route-btn primary"   onclick="saveRoute()">Save &amp; Share</button>
-      </div>
-    </div>
-    <!-- Step 2: share -->
-    <div id="route-step-share" style="display:none">
-      <div id="route-saved-name"></div>
-      <div id="route-saved-msg">Route saved! Share this link:</div>
-      <input id="route-share-url" readonly>
-      <div class="route-actions">
-        <button class="route-btn secondary" onclick="closeRouteModal()">Close</button>
-        <button class="route-btn primary"   onclick="copyRouteUrl()">Copy URL</button>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -1237,17 +916,10 @@ function refreshChips() {
 // ─────────────────────────────────────────────────────────
 //  Modal
 // ─────────────────────────────────────────────────────────
-let selectedSpotId   = null;
-let isNavigating     = false;
-let navSpot          = null;
 let _modalMap        = null;
-let isRouteNavActive = false;
-let routeSpots       = [];
-let routeIdx         = 0;
 
 function openModal(spot, dist) {
   Analytics.onModalOpen(spot.id);
-  selectedSpotId    = spot.id;
   window._activeSpot = spot;
   window._activeDist = dist;
   document.getElementById('modal-cat').textContent  = spotCategories(spot).map(c => tCat(c)).join(' · ');
@@ -1286,11 +958,6 @@ function openModal(spot, dist) {
 
   document.getElementById('modal').classList.add('open');
 
-  // ナビボタンのカテゴリカラーを設定して表示
-  const navBtn = document.getElementById('nav-btn');
-  navBtn.style.background = primaryCatColor(spot);
-  navBtn.style.display    = 'block';
-
   // 方向矢印を即更新（選択スポットは距離制限なし）
   scheduleOverlay();
 
@@ -1301,15 +968,10 @@ function openModal(spot, dist) {
 function closeModal() {
   Analytics.onModalClose();
   document.getElementById('modal').classList.remove('open');
-  document.getElementById('nav-btn').style.display = 'none';
   window._activeSpot = null;
   if (_modalMap) { _modalMap.remove(); _modalMap = null; }
 
-  // ナビ中はselectedSpotIdを維持；ナビ中でなければクリア
-  if (!isNavigating) {
-    selectedSpotId = null;
-    scheduleOverlay();
-  }
+  scheduleOverlay();
 }
 
 function initModalMap(spot) {
@@ -1349,41 +1011,8 @@ function initModalMap(spot) {
     }).addTo(_modalMap);
     bounds.push([userPos.lat, userPos.lng]);
 
-    // ── OSRM で道路ルートを取得、失敗時は直線フォールバック ──
-    const routeLabel = L.tooltip({ permanent: true, direction: 'center', offset: [0, 0] })
-      .setContent('ルート取得中…');
-    _modalMap.openTooltip(routeLabel, [
-      (userPos.lat + spot.lat) / 2, (userPos.lng + spot.lng) / 2
-    ]);
     _modalMap.fitBounds(bounds, { padding: [28, 28], maxZoom: 16 });
     _modalMap.invalidateSize();
-
-    const osrmUrl =
-      `https://router.project-osrm.org/route/v1/foot/` +
-      `${userPos.lng},${userPos.lat};${spot.lng},${spot.lat}` +
-      `?overview=full&geometries=geojson`;
-
-    fetch(osrmUrl)
-      .then(r => { if (!r.ok) throw new Error('OSRM ' + r.status); return r.json(); })
-      .then(data => {
-        _modalMap.closeTooltip(routeLabel);
-        const geom = data.routes?.[0]?.geometry;
-        if (!geom) throw new Error('no route');
-        L.geoJSON(geom, {
-          style: { color, weight: 4, opacity: 0.8 }
-        }).addTo(_modalMap);
-        // ルートを含めて fitBounds を更新
-        const latlngs = geom.coordinates.map(([lng, lat]) => [lat, lng]);
-        _modalMap.fitBounds(L.polyline(latlngs).getBounds(), { padding: [20, 20] });
-      })
-      .catch(() => {
-        // フォールバック：直線（破線）
-        _modalMap.closeTooltip(routeLabel);
-        L.polyline(
-          [[userPos.lat, userPos.lng], [spot.lat, spot.lng]],
-          { color, weight: 3, dashArray: '7 6', opacity: 0.75 }
-        ).addTo(_modalMap);
-      });
   } else {
     _modalMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
     _modalMap.invalidateSize();
@@ -1392,269 +1021,6 @@ function initModalMap(spot) {
 
 function handleModalBg(e) {
   if (e.target.id === 'modal') closeModal();
-}
-
-// ── Navigation ────────────────────────────────────────────
-let _miniMap          = null;
-let _miniMapPosMarker = null;
-let _navPathways      = null;  // session cache for pathway data
-
-function triggerNavigation() {
-  const spot = window._activeSpot;
-  if (!spot) return;
-  isNavigating   = true;
-  navSpot        = spot;
-  selectedSpotId = spot.id;
-  closeModal();
-  initMiniMap(spot);
-  scheduleOverlay();
-}
-
-function cancelNavigation() {
-  isRouteNavActive = false;
-  routeSpots       = [];
-  routeIdx         = 0;
-  isNavigating     = false;
-  navSpot          = null;
-  selectedSpotId   = null;
-  if (_miniMap) { _miniMap.remove(); _miniMap = null; }
-  _miniMapPosMarker = null;
-  document.getElementById('nav-minimap-wrap').classList.remove('show');
-  document.getElementById('nav-minimap-arrive').classList.remove('show');
-  updateRouteProgress();
-  scheduleOverlay();
-}
-
-const ROUTE_NUMS = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
-
-function updateRouteProgress() {
-  const bar = document.getElementById('route-nav-bar');
-  const btn = document.getElementById('route-nav-btn');
-  if (!bar || !btn) return;
-  if (isRouteNavActive && routeSpots.length > 0) {
-    bar.style.display = 'flex';
-    btn.style.display = 'none';
-    const spot = routeSpots[routeIdx];
-    const num  = ROUTE_NUMS[routeIdx] || `${routeIdx + 1}`;
-    document.getElementById('route-nav-label').textContent =
-      `${num} / ${routeSpots.length}　${spot.name[lang] || spot.name.jp || spot.name.en}`;
-  } else {
-    bar.style.display = 'none';
-    btn.style.display = spots.some(s => s.inRoute) ? 'flex' : 'none';
-  }
-}
-
-function startRouteNav() {
-  routeSpots = spots.filter(s => s.inRoute)
-    .sort((a, b) => (a.routeOrder || 999) - (b.routeOrder || 999));
-  if (!routeSpots.length) return;
-
-  // Start from nearest inRoute spot
-  routeIdx = 0;
-  if (userPos) {
-    let minDist = Infinity;
-    routeSpots.forEach((s, i) => {
-      const d = haversine(userPos.lat, userPos.lng, s.lat, s.lng);
-      if (d < minDist) { minDist = d; routeIdx = i; }
-    });
-  }
-
-  isRouteNavActive = true;
-  const spot = routeSpots[routeIdx];
-  isNavigating   = true;
-  navSpot        = spot;
-  selectedSpotId = spot.id;
-  initMiniMap(spot);
-  updateRouteProgress();
-  scheduleOverlay();
-}
-
-function advanceRoute() {
-  routeIdx++;
-  document.getElementById('nav-minimap-arrive').classList.remove('show');
-  if (routeIdx >= routeSpots.length) {
-    const n = routeSpots.length;
-    isRouteNavActive = false;
-    cancelNavigation();
-    setTimeout(() => {
-      const t = document.getElementById('compass-toast');
-      t.style.color = '#1a6e2e';
-      t.style.borderColor = 'rgba(0,150,50,0.4)';
-      t.textContent = `🎉 順路完了！${n}スポット巡りました`;
-      t.classList.add('show');
-      setTimeout(() => {
-        t.classList.remove('show');
-        t.style.color = '';
-        t.style.borderColor = '';
-        t.textContent = '🧭 Tap screen to enable compass';
-      }, 3000);
-    }, 200);
-    return;
-  }
-  const spot = routeSpots[routeIdx];
-  navSpot        = spot;
-  selectedSpotId = spot.id;
-  initMiniMap(spot);
-  updateRouteProgress();
-  scheduleOverlay();
-}
-
-function updateRouteNav() {
-  if (!isRouteNavActive || !navSpot || !userPos) return;
-  const dist = haversine(userPos.lat, userPos.lng, navSpot.lat, navSpot.lng);
-  if (dist <= 50) advanceRoute();
-}
-
-async function initMiniMap(spot) {
-  const wrap      = document.getElementById('nav-minimap-wrap');
-  const container = document.getElementById('nav-minimap');
-  if (_miniMap) { _miniMap.remove(); _miniMap = null; }
-  _miniMapPosMarker = null;
-
-  // ヘッダータイトル
-  const titleEl = document.getElementById('nav-minimap-title');
-  if (titleEl) {
-    const catIcon = CAT_ICON_MAP[spot.category] || '📍';
-    titleEl.textContent = `${catIcon} ${spot.name[lang] || spot.name.jp || spot.name.en || ''}`;
-  }
-
-  const color = primaryCatColor(spot);
-  wrap.style.borderTop = `4px solid ${color}`;
-
-  _miniMap = L.map(container, {
-    zoomControl: false, attributionControl: false,
-    dragging: true, scrollWheelZoom: false,
-    doubleClickZoom: false, boxZoom: false, keyboard: false
-  });
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(_miniMap);
-
-  // 目的スポットマーカー
-  const icon = CAT_ICON_MAP[spot.category] || '📍';
-  const spotIcon = L.divIcon({
-    className: '',
-    html: `<div style="width:28px;height:28px;border-radius:50%;
-      background:${color};border:2px solid #fff;
-      display:flex;align-items:center;justify-content:center;
-      font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,0.35)">${icon}</div>`,
-    iconSize: [28, 28], iconAnchor: [14, 14]
-  });
-  L.marker([spot.lat, spot.lng], { icon: spotIcon }).addTo(_miniMap);
-
-  // 地図を先に表示
-  wrap.classList.add('show');
-  setTimeout(() => _miniMap && _miniMap.invalidateSize(), 80);
-
-  // 現在地マーカー
-  const bounds = [[spot.lat, spot.lng]];
-  if (userPos) {
-    _miniMapPosMarker = L.circleMarker([userPos.lat, userPos.lng], {
-      radius: 6, fillColor: '#2563eb', color: '#fff', weight: 2, fillOpacity: 1
-    }).addTo(_miniMap);
-    bounds.push([userPos.lat, userPos.lng]);
-  }
-
-  // Supabase pathways を優先、なければ OSRM、さらに失敗なら直線
-  const pathways = await loadNavPathways();
-  const bestPw   = findBestPathway(pathways, spot);
-
-  if (bestPw) {
-    const pts = bestPw.points || bestPw.pathway || [];
-    if (pts.length >= 2) {
-      const coords = pts.map(p => [p.lat, p.lng]);
-      L.polyline(coords, { color, weight: 4, opacity: 0.85 }).addTo(_miniMap);
-      const allBounds = L.latLngBounds(coords);
-      if (userPos) allBounds.extend([userPos.lat, userPos.lng]);
-      _miniMap.fitBounds(allBounds, { padding: [16, 16] });
-      return;
-    }
-  }
-
-  // OSRM フォールバック（失敗時は直線）
-  if (userPos) {
-    const osrmUrl =
-      `https://router.project-osrm.org/route/v1/foot/` +
-      `${userPos.lng},${userPos.lat};${spot.lng},${spot.lat}` +
-      `?overview=full&geometries=geojson`;
-    fetch(osrmUrl)
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(data => {
-        const geom = data.routes?.[0]?.geometry;
-        if (!geom || !_miniMap) return;
-        L.geoJSON(geom, { style: { color, weight: 3, opacity: 0.8 } }).addTo(_miniMap);
-        const ll = geom.coordinates.map(([lng, lat]) => [lat, lng]);
-        _miniMap.fitBounds(L.polyline(ll).getBounds(), { padding: [16, 16] });
-      })
-      .catch(() => {
-        if (!_miniMap) return;
-        L.polyline([[userPos.lat, userPos.lng], [spot.lat, spot.lng]],
-          { color, weight: 2, dashArray: '5 4', opacity: 0.75 }
-        ).addTo(_miniMap);
-        _miniMap.fitBounds(L.latLngBounds(bounds), { padding: [16, 16] });
-      });
-  } else {
-    _miniMap.setView([spot.lat, spot.lng], 15);
-  }
-}
-
-function updateMiniMapPos() {
-  if (!isNavigating || !navSpot || !_miniMap) return;
-  if (!userPos) return;
-
-  const dist = haversine(userPos.lat, userPos.lng, navSpot.lat, navSpot.lng);
-
-  // 現在地マーカーを移動
-  if (_miniMapPosMarker) {
-    _miniMapPosMarker.setLatLng([userPos.lat, userPos.lng]);
-  } else {
-    _miniMapPosMarker = L.circleMarker([userPos.lat, userPos.lng], {
-      radius: 5, fillColor: '#2563eb', color: '#fff', weight: 2, fillOpacity: 1
-    }).addTo(_miniMap);
-  }
-
-  // 到着判定 10m
-  if (dist <= 10) {
-    const arrive = document.getElementById('nav-minimap-arrive');
-    if (!arrive.classList.contains('show')) {
-      arrive.textContent = '✅';
-      arrive.classList.add('show');
-      setTimeout(() => cancelNavigation(), 3000);
-    }
-  }
-}
-
-// ─────────────────────────────────────────────────────────
-//  Pathway helpers for nav map
-// ─────────────────────────────────────────────────────────
-async function loadNavPathways() {
-  if (_navPathways !== null) return _navPathways;
-  try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/pathways?select=*&order=created_at.asc`,
-      { headers: SB_HEADERS }
-    );
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const rows = await r.json();
-    _navPathways = rows.map(row => ({ ...(row.points || {}), id: row.id }));
-  } catch(e) {
-    console.warn('Pathways load failed:', e);
-    _navPathways = [];
-  }
-  return _navPathways;
-}
-
-function findBestPathway(pathways, spot) {
-  let bestPw = null, bestDist = Infinity;
-  pathways.forEach(pw => {
-    // 完全一致：訪問スポットIDに含まれている
-    if ((pw.spotsVisited || []).includes(spot.id)) { bestPw = pw; bestDist = 0; return; }
-    // 地理的近傍：経路上の最近点がスポットに近い
-    const pts = pw.points || pw.pathway || [];
-    pts.forEach(p => {
-      const d = haversine(p.lat, p.lng, spot.lat, spot.lng);
-      if (d < bestDist) { bestDist = d; bestPw = pw; }
-    });
-  });
-  return (bestDist <= 300 && bestPw) ? bestPw : null;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1775,8 +1141,6 @@ const TEST_MODE   = _testParams.has('mock') || _testParams.has('play');
 // 現在地の更新は必ずこの1か所を通る（本物のGPS・固定・再生で共通の入り口）
 function applyPosition(lat, lng, accuracy) {
   userPos = { lat, lng };
-  updateMiniMapPos();
-  updateRouteNav();
   checkIntroTrigger();
   refreshChips();
   scheduleOverlay();
@@ -1909,7 +1273,7 @@ function initPermissionsAndAR() {
 //  Compass + AR HTML Overlay
 // ─────────────────────────────────────────────────────────
 const H_FOV          = 62;   // horizontal camera field of view (degrees)
-const ARROW_MAX_DIST = 100;  // max distance (m) to show edge arrows (default)
+const ARROW_MAX_DIST = 30;   // 画面端の矢印を出す距離(m)。スポットごとの arMaxDist があればそちらを優先
 
 let compassHeading = null;   // degrees from true north, clockwise (null = unavailable)
 let deviceBeta     = 50;     // device pitch: 0=horizontal, 90=vertical
@@ -2061,16 +1425,8 @@ function renderAROverlay() {
   // スポットごとの矢印表示距離（arMaxDist未設定ならARROW_MAX_DIST）
   const spotMaxDist = s => s.arMaxDist > 0 ? s.arMaxDist : ARROW_MAX_DIST;
 
-  // ── Front indicator: in-view, outside radius, closest only ──
-  const frontCandidates = data
-    .filter(d => d.inView && !d.inRadius &&
-      (d.dist <= spotMaxDist(d.spot) || d.spot.id === selectedSpotId))
-    .sort((a, b) => a.dist - b.dist);
-  updateFrontIndicator(frontCandidates[0] || null);
-
   // ── Edge arrows: out of view ──
-  const edgeData  = data.filter(d => !d.inView &&
-    (d.dist <= spotMaxDist(d.spot) || d.spot.id === selectedSpotId));
+  const edgeData  = data.filter(d => !d.inView && d.dist <= spotMaxDist(d.spot));
   const leftEdge  = edgeData.filter(d => d.rel < 0).sort((a, b) => a.dist - b.dist).slice(0, 2);
   const rightEdge = edgeData.filter(d => d.rel > 0).sort((a, b) => a.dist - b.dist).slice(0, 2);
 
@@ -2087,7 +1443,6 @@ function renderAROverlay() {
     const cx = Math.max(BUBBLE_W / 2 + 6, Math.min(W - BUBBLE_W / 2 - 6, d.screenX));
     el.style.left    = `${cx}px`;
     el.style.top     = `${d.finalY}px`;
-    el.style.opacity = (isNavigating && navSpot && d.spot.id !== navSpot.id) ? '0.5' : '';
     refreshCallout(el, d.spot, d.dist);
   });
 
@@ -2101,13 +1456,7 @@ function renderAROverlay() {
       let el = overlay.querySelector(`.ar-edge[data-id="${d.spot.id}"]`);
       if (!el) { el = buildEdgeEl(d.spot, side); overlay.appendChild(el); }
 
-      // ナビ強調・控えめ
-      const isTarget = isNavigating && navSpot && d.spot.id === navSpot.id;
-      const isOther  = isNavigating && navSpot && d.spot.id !== navSpot.id;
-      const color    = isTarget ? '#f97316' : isOther ? '#9ca3af' : primaryCatColor(d.spot);
-      el.style.opacity      = isOther ? '0.5' : '';
-      el.style.transform    = isTarget ? 'scale(1.5)' : isOther ? 'scale(0.7)' : '';
-      el.style.transformOrigin = 'center center';
+      const color    = primaryCatColor(d.spot);
 
       el.className   = `ar-edge side-${side}`;
       el.style.top   = `${startY + i * (EDGE_H + EDGE_GAP)}px`;
@@ -2132,40 +1481,6 @@ function renderAROverlay() {
       }
     });
   });
-  renderPathwayOverlay();
-}
-
-function updateFrontIndicator(d) {
-  const el = document.getElementById('front-indicator');
-  if (!d) {
-    el.classList.remove('visible');
-    el.style.transform = '';
-    el.style.opacity   = '';
-    return;
-  }
-
-  // ナビ中：ターゲット強調（オレンジ1.5倍） / 他は控えめ（グレー0.7倍 50%透明）
-  const isTarget = isNavigating && navSpot && d.spot.id === navSpot.id;
-  const isOther  = isNavigating && navSpot && d.spot.id !== navSpot.id;
-  const color    = isTarget ? '#f97316' : isOther ? '#9ca3af' : primaryCatColor(d.spot);
-
-  el.style.transform    = isTarget ? 'translateX(-50%) scale(1.5)' :
-                          isOther  ? 'translateX(-50%) scale(0.7)' : '';
-  el.style.opacity      = isOther ? '0.5' : '';
-  el.style.transformOrigin = 'center bottom';
-
-  const body = el.querySelector('.nav-arrow-body');
-  if (body) {
-    body.style.background =
-      `linear-gradient(180deg, ${color}18 0%, ${color}bb 55%, ${color} 100%)`;
-    el.querySelector('.nav-3d-wrap').style.filter =
-      `drop-shadow(0 10px 18px ${color}55)`;
-  }
-  el.querySelector('.fi-dist').style.color = color;
-  el.querySelector('.fi-name').textContent =
-    (d.spot.name[lang] || d.spot.name.jp || d.spot.name.en).slice(0, 18);
-  el.querySelector('.fi-dist').textContent = `${Math.round(d.dist)}m`;
-  el.classList.add('visible');
 }
 
 function buildCalloutEl(spot) {
@@ -2232,350 +1547,6 @@ function buildEdgeEl(spot, side) {
 function clearAROverlay() {
   const overlay = document.getElementById('ar-overlay');
   if (overlay) overlay.innerHTML = '';
-  document.getElementById('front-indicator')?.classList.remove('visible');
-}
-
-// ─────────────────────────────────────────────────────────
-//  Route Recording
-// ─────────────────────────────────────────────────────────
-let isRecording  = false;
-let recPoints    = [];
-let recStartTime = 0;
-let recInterval  = null;   // 5s GPS log timer
-let recTickTimer = null;   // 1s UI elapsed timer
-let recElapsed   = 0;
-
-function toggleRecording() {
-  if (isRecording) stopRecording(); else startRecording();
-}
-
-function startRecording() {
-  if (!userPos) {
-    alert('GPS not yet available — please wait for a GPS fix.');
-    return;
-  }
-  isRecording  = true;
-  recPoints    = [];
-  recStartTime = Date.now();
-  recElapsed   = 0;
-
-  logRecPoint();
-  recInterval  = setInterval(logRecPoint, 5000);
-  recTickTimer = setInterval(() => { recElapsed++; updateRecBtn(); }, 1000);
-  updateRecBtn();
-}
-
-function logRecPoint() {
-  if (!userPos) return;
-  recPoints.push({ lat: userPos.lat, lng: userPos.lng, t: Date.now() });
-}
-
-function stopRecording() {
-  clearInterval(recInterval);
-  clearInterval(recTickTimer);
-  recInterval = recTickTimer = null;
-  isRecording = false;
-  updateRecBtn();
-  if (recPoints.length === 0) return;
-  showRouteSaveDialog();
-}
-
-function updateRecBtn() {
-  const btn = document.getElementById('rec-btn');
-  if (isRecording) {
-    btn.classList.add('recording');
-    const mm = String(Math.floor(recElapsed / 60)).padStart(2, '0');
-    const ss = String(recElapsed % 60).padStart(2, '0');
-    document.getElementById('rec-dot').textContent   = '■';
-    document.getElementById('rec-label').textContent = 'STOP';
-    let timerEl = document.getElementById('rec-timer');
-    if (!timerEl) {
-      timerEl    = document.createElement('span');
-      timerEl.id = 'rec-timer';
-      btn.appendChild(timerEl);
-    }
-    timerEl.textContent = `${mm}:${ss}`;
-  } else {
-    btn.classList.remove('recording');
-    document.getElementById('rec-dot').textContent   = '●';
-    document.getElementById('rec-label').textContent = 'REC';
-    const timerEl = document.getElementById('rec-timer');
-    if (timerEl) timerEl.remove();
-  }
-}
-
-function calcRecStats() {
-  let dist = 0;
-  for (let i = 1; i < recPoints.length; i++) {
-    dist += haversine(
-      recPoints[i-1].lat, recPoints[i-1].lng,
-      recPoints[i].lat,   recPoints[i].lng
-    );
-  }
-  const dur     = Math.round((Date.now() - recStartTime) / 1000);
-  const visited = spots.filter(spot =>
-    recPoints.some(p => haversine(p.lat, p.lng, spot.lat, spot.lng) <= (spot.radius || 50))
-  );
-  return { dist: Math.round(dist), dur, visited };
-}
-
-function showRouteSaveDialog() {
-  const { dist, dur, visited } = calcRecStats();
-  const mm = Math.floor(dur / 60), ss = dur % 60;
-  const distLabel = dist >= 1000 ? `${(dist / 1000).toFixed(2)} km` : `${dist} m`;
-  document.getElementById('route-modal-stats').textContent =
-    `${mm}min ${ss}s · ${distLabel} · ${visited.length} spot${visited.length !== 1 ? 's' : ''}`;
-  document.getElementById('route-name-input').value = '';
-  document.getElementById('route-step-name').style.display  = '';
-  document.getElementById('route-step-share').style.display = 'none';
-  const saveBtn = document.querySelector('#route-step-name .route-btn.primary');
-  saveBtn.textContent = 'Save & Share';
-  saveBtn.disabled    = false;
-  document.getElementById('route-modal').classList.add('open');
-  setTimeout(() => document.getElementById('route-name-input').focus(), 100);
-}
-
-function cancelRouteSave() {
-  document.getElementById('route-modal').classList.remove('open');
-  recPoints     = [];
-  pathwayPoints = [];
-  const saveBtn = document.querySelector('#route-step-name .route-btn.primary');
-  if (saveBtn) { saveBtn.onclick = saveRoute; saveBtn.textContent = 'Save & Share'; saveBtn.disabled = false; }
-}
-
-function closeRouteModal() {
-  document.getElementById('route-modal').classList.remove('open');
-  recPoints     = [];
-  pathwayPoints = [];
-  const saveBtn = document.querySelector('#route-step-name .route-btn.primary');
-  if (saveBtn) { saveBtn.onclick = saveRoute; saveBtn.textContent = 'Save & Share'; saveBtn.disabled = false; }
-}
-
-function handleRouteModalBg(e) {
-  if (e.target.id === 'route-modal') cancelRouteSave();
-}
-
-async function saveRoute() {
-  const name    = document.getElementById('route-name-input').value.trim() || 'My Route';
-  const saveBtn = document.querySelector('#route-step-name .route-btn.primary');
-  saveBtn.textContent = 'Saving…';
-  saveBtn.disabled    = true;
-
-  const { dist, dur, visited } = calcRecStats();
-  const route = {
-    name,
-    createdAt:    new Date().toISOString(),
-    startTime:    recStartTime,
-    endTime:      Date.now(),
-    duration:     dur,
-    distance:     dist,
-    points:       recPoints,
-    spotsVisited: visited.map(s => s.id)
-  };
-
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/pathways`, {
-      method:  'POST',
-      headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
-      body:    JSON.stringify({ name, points: route })
-    });
-    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
-    const rows    = await r.json();
-    const routeId = rows[0].id;
-
-    const url = `${location.origin}/route.html?id=${routeId}`;
-    document.getElementById('route-saved-name').textContent = name;
-    document.getElementById('route-share-url').value        = url;
-    document.getElementById('route-step-name').style.display  = 'none';
-    document.getElementById('route-step-share').style.display = '';
-  } catch(e) {
-    console.error('Route save failed:', e);
-    alert('Failed to save route: ' + e.message);
-    saveBtn.textContent = 'Save & Share';
-    saveBtn.disabled    = false;
-  }
-}
-
-async function copyRouteUrl() {
-  const url     = document.getElementById('route-share-url').value;
-  const copyBtn = document.querySelector('#route-step-share .route-btn.primary');
-  try {
-    await navigator.clipboard.writeText(url);
-    copyBtn.textContent = 'Copied!';
-    setTimeout(() => { copyBtn.textContent = 'Copy URL'; }, 2000);
-  } catch {
-    document.getElementById('route-share-url').select();
-  }
-}
-
-// ─────────────────────────────────────────────────────────
-//  Pathway Recording  (3s interval · AR canvas overlay)
-// ─────────────────────────────────────────────────────────
-let isPathwayRecording = false;
-let pathwayPoints      = [];
-let pathwayInterval    = null;
-let pathwayTickTimer   = null;
-let pathwayElapsed     = 0;
-let activePathway      = null;
-
-function togglePathwayRecording() {
-  if (isPathwayRecording) stopPathwayRecording(); else startPathwayRecording();
-}
-
-function startPathwayRecording() {
-  if (!userPos) { alert('GPS未取得 — しばらくお待ちください。'); return; }
-  isPathwayRecording = true;
-  pathwayPoints      = [];
-  pathwayElapsed     = 0;
-  logPathwayPoint();
-  pathwayInterval  = setInterval(logPathwayPoint, 3000);
-  pathwayTickTimer = setInterval(() => { pathwayElapsed++; updatePathwayBtn(); }, 1000);
-  updatePathwayBtn();
-}
-
-function logPathwayPoint() {
-  if (!userPos) return;
-  pathwayPoints.push({ lat: userPos.lat, lng: userPos.lng, t: Date.now() });
-}
-
-function stopPathwayRecording() {
-  clearInterval(pathwayInterval);
-  clearInterval(pathwayTickTimer);
-  pathwayInterval = pathwayTickTimer = null;
-  isPathwayRecording = false;
-  updatePathwayBtn();
-  if (pathwayPoints.length < 2) { pathwayPoints = []; return; }
-  showPathwaySaveDialog();
-}
-
-function updatePathwayBtn() {
-  const btn = document.getElementById('pathway-btn');
-  if (!btn) return;
-  if (isPathwayRecording) {
-    btn.classList.add('recording');
-    const mm = String(Math.floor(pathwayElapsed / 60)).padStart(2, '0');
-    const ss = String(pathwayElapsed % 60).padStart(2, '0');
-    document.getElementById('pathway-dot').textContent   = '■';
-    document.getElementById('pathway-label').textContent = '停止';
-    let t = document.getElementById('pathway-timer');
-    if (!t) { t = document.createElement('span'); t.id = 'pathway-timer'; btn.appendChild(t); }
-    t.textContent = `${mm}:${ss}`;
-  } else {
-    btn.classList.remove('recording');
-    document.getElementById('pathway-dot').textContent   = '🛤';
-    document.getElementById('pathway-label').textContent = '通路';
-    const t = document.getElementById('pathway-timer');
-    if (t) t.remove();
-  }
-}
-
-function showPathwaySaveDialog() {
-  let dist = 0;
-  for (let i = 1; i < pathwayPoints.length; i++)
-    dist += haversine(pathwayPoints[i-1].lat, pathwayPoints[i-1].lng,
-                      pathwayPoints[i].lat,   pathwayPoints[i].lng);
-  const distLabel = dist >= 1000 ? `${(dist/1000).toFixed(2)}km` : `${Math.round(dist)}m`;
-  document.getElementById('route-modal-stats').textContent =
-    `通路 ${pathwayPoints.length}地点 · ${distLabel} を記録`;
-  document.getElementById('route-name-input').value = '通路データ';
-  document.getElementById('route-step-name').style.display  = '';
-  document.getElementById('route-step-share').style.display = 'none';
-  const saveBtn = document.querySelector('#route-step-name .route-btn.primary');
-  saveBtn.textContent = '保存して表示';
-  saveBtn.disabled    = false;
-  saveBtn.onclick     = savePathway;
-  document.getElementById('route-modal').classList.add('open');
-}
-
-async function savePathway() {
-  const name    = document.getElementById('route-name-input').value.trim() || '通路データ';
-  const saveBtn = document.querySelector('#route-step-name .route-btn.primary');
-  saveBtn.textContent = '保存中…';
-  saveBtn.disabled    = true;
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/pathways`, {
-      method:  'POST',
-      headers: { ...SB_HEADERS, 'Prefer': 'return=representation' },
-      body:    JSON.stringify({
-        name,
-        points: { name, type: 'pathway', createdAt: new Date().toISOString(), pathway: pathwayPoints }
-      })
-    });
-    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
-    activePathway  = pathwayPoints.slice();
-    pathwayPoints  = [];
-    _navPathways   = null;  // キャッシュをクリア（次回ナビで最新データを取得）
-    document.getElementById('pathway-clear-btn').style.display = 'block';
-    document.getElementById('route-modal').classList.remove('open');
-    scheduleOverlay();
-  } catch(e) {
-    console.error('Pathway save failed:', e);
-    alert('保存失敗: ' + e.message);
-    saveBtn.textContent = '保存して表示';
-    saveBtn.disabled    = false;
-  }
-}
-
-function clearPathway() {
-  activePathway = null;
-  document.getElementById('pathway-clear-btn').style.display = 'none';
-  const canvas = document.getElementById('pathway-canvas');
-  if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-}
-
-function projectPathPoint(lat, lng) {
-  if (!userPos || compassHeading === null) return null;
-  const dist = haversine(userPos.lat, userPos.lng, lat, lng);
-  if (dist > 100) return null;
-  const brg     = bearingTo(userPos.lat, userPos.lng, lat, lng);
-  const rel     = normAngle(brg - compassHeading);
-  const W       = window.innerWidth, H = window.innerHeight;
-  const halfFov = H_FOV / 2;
-  const pitchY  = H * Math.min(Math.max(0.26 + (deviceBeta - 50) * 0.006, 0.24), 0.60);
-  const screenX = W / 2 + (rel / halfFov) * (W / 2);
-  const screenY = pitchY + (H * 0.95 - pitchY) / (1 + dist / 5);
-  return { x: screenX, y: screenY, dist };
-}
-
-function pathwayDistColor(dist) {
-  const t = Math.min(dist / 50, 1);
-  const r = Math.round(16  + t * 43);
-  const g = Math.round(185 - t * 55);
-  const b = Math.round(129 + t * 117);
-  return `rgb(${r},${g},${b})`;
-}
-
-function renderPathwayOverlay() {
-  const canvas = document.getElementById('pathway-canvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  canvas.width  = window.innerWidth;
-  canvas.height = window.innerHeight;
-  if (!activePathway || activePathway.length < 2 || !userPos || compassHeading === null) return;
-  const projected = activePathway.map(p => projectPathPoint(p.lat, p.lng));
-  ctx.lineCap  = 'round';
-  ctx.lineJoin = 'round';
-  for (let i = 1; i < projected.length; i++) {
-    const p0 = projected[i - 1], p1 = projected[i];
-    if (!p0 || !p1) continue;
-    const d = (p0.dist + p1.dist) / 2;
-    ctx.beginPath();
-    ctx.moveTo(p0.x, p0.y);
-    ctx.lineTo(p1.x, p1.y);
-    ctx.strokeStyle = pathwayDistColor(d);
-    ctx.lineWidth   = Math.max(2, 7 * (1 - d / 60));
-    ctx.globalAlpha = Math.max(0.25, 1 - d / 80);
-    ctx.stroke();
-  }
-  projected.forEach(p => {
-    if (!p) return;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, Math.max(2, 4.5 * (1 - p.dist / 60)), 0, Math.PI * 2);
-    ctx.fillStyle   = pathwayDistColor(p.dist);
-    ctx.globalAlpha = Math.max(0.3, 1 - p.dist / 80);
-    ctx.fill();
-  });
-  ctx.globalAlpha = 1;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -2744,104 +1715,6 @@ const GpsTracker = (() => {
 })();
 
 // ─────────────────────────────────────────────────────────
-//  Vision: capture camera frame → /api/analyze → direction arrow
-// ─────────────────────────────────────────────────────────
-const Vision = (() => {
-  const INTERVAL_MS  = 3000;   // capture every 3 s
-  const JPEG_QUALITY = 0.5;    // lower quality = smaller payload
-  const CAPTURE_W    = 320;    // resize before encoding (saves bandwidth)
-  const CAPTURE_H    = 240;
-
-  const DIR_MAP = {
-    straight: { icon: '↑', label: '直進' },
-    left:     { icon: '←', label: '左方向' },
-    right:    { icon: '→', label: '右方向' },
-    arrived:  { icon: '✅', label: '到着' }
-  };
-
-  let _timer   = null;
-  let _busy    = false;   // prevent overlapping requests
-  let _offscreen = null;  // OffscreenCanvas or regular Canvas for capture
-
-  function getSourceVideo() {
-    // AR.js injects a <video> element into the body
-    return document.querySelector('video');
-  }
-
-  function captureBase64() {
-    const video = getSourceVideo();
-    if (!video || video.readyState < video.HAVE_ENOUGH_DATA) return null;
-
-    if (!_offscreen) {
-      _offscreen = document.createElement('canvas');
-      _offscreen.width  = CAPTURE_W;
-      _offscreen.height = CAPTURE_H;
-    }
-    const ctx = _offscreen.getContext('2d');
-    ctx.drawImage(video, 0, 0, CAPTURE_W, CAPTURE_H);
-    // Remove the "data:image/jpeg;base64," prefix
-    return _offscreen.toDataURL('image/jpeg', JPEG_QUALITY).split(',')[1];
-  }
-
-  function showArrow(direction, description) {
-    const el = document.getElementById('direction-arrow');
-    const d  = DIR_MAP[direction] || DIR_MAP.straight;
-    document.getElementById('dir-icon').textContent  = d.icon;
-    document.getElementById('dir-label').textContent = description || d.label;
-    el.classList.add('visible');
-  }
-
-  function hideArrow() {
-    document.getElementById('direction-arrow').classList.remove('visible');
-  }
-
-  async function analyze() {
-    if (_busy) return;
-    _busy = true;
-    try {
-      const b64 = captureBase64();
-      if (!b64) return;
-
-      const r = await fetch('/api/analyze', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ image: b64 })
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-
-      const data = await r.json();
-      if (data.road_detected) {
-        showArrow(data.direction, data.description);
-      } else {
-        hideArrow();
-      }
-    } catch(e) {
-      console.warn('[Vision] analyze error:', e.message);
-      hideArrow();
-    } finally {
-      _busy = false;
-    }
-  }
-
-  function start() {
-    if (_timer) return;
-    // Initial delay: wait for camera to stabilise
-    setTimeout(() => {
-      analyze();
-      _timer = setInterval(analyze, INTERVAL_MS);
-    }, 2000);
-    console.log('[Vision] started — capturing every', INTERVAL_MS / 1000, 's');
-  }
-
-  function stop() {
-    clearInterval(_timer); _timer = null;
-    hideArrow();
-  }
-
-  return { start, stop };
-})();
-
-// ─────────────────────────────────────────────────────────
 //  現地チェックイン（羽黒山エリア 5km 圏内のみ起動）
 // ─────────────────────────────────────────────────────────
 const AREA_CENTER   = { lat: 38.720, lng: 139.973 };
@@ -2917,11 +1790,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (memoriesLink) memoriesLink.href = `memories.html?session=${Analytics.SESSION_ID}`;
   await Promise.all([loadSpots(), loadIntroConfig()]);
   refreshChips();
-  updateRouteProgress();
 
   function startApp() {
     initPermissionsAndAR();
-    Vision.start();
   }
 
   // 初回起動（言語未設定）は言語選択画面を表示してから起動

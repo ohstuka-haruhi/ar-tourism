@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Development server for AR Tourism Guide.
-Serves static files and accepts PUT /spots.json, POST /routes.json.
-Analytics, tracks, and routes are stored in Supabase.
+Serves static files and accepts PUT /spots.json (admin only).
+Analytics, tracks, and routes (read-only, for test playback) are stored in Supabase.
 
 Usage:
     python3 server.py          # port 8080
@@ -12,7 +12,6 @@ import hmac
 import json
 import os
 import re
-import secrets
 import sys
 import urllib.request
 import urllib.error
@@ -350,13 +349,6 @@ class Handler(SimpleHTTPRequestHandler):
             self._post_analytics()
         elif path == '/tracks':
             self._post_tracks()
-        elif path == '/api/analyze':
-            self._post_analyze()
-        elif path == '/' + ROUTES_FILE:
-            # 順路データの保存は管理者専用 → 認証を要求
-            if not self._guard_admin():
-                return
-            self._post_route()
         else:
             self.send_response(404)
             self.send_header('Content-Type', 'application/json')
@@ -427,127 +419,6 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({'error': str(e)}).encode())
 
-    def _post_route(self):
-        try:
-            length = int(self.headers.get('Content-Length', 0))
-            route  = json.loads(self.rfile.read(length))
-            if not isinstance(route, dict):
-                raise ValueError('Payload must be a JSON object')
-            name = route.get('name', 'Unnamed')
-            rows = self._sb('POST', 'pathways',
-                            {'name': name, 'points': route},
-                            {'Prefer': 'return=representation'})
-            route_id = rows[0]['id'] if rows else secrets.token_hex(6)
-            self.send_response(201)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'ok': True, 'id': route_id}).encode())
-        except Exception as e:
-            print(f'  \033[31m✗  route POST: {e}\033[0m')
-            self.send_response(500)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-
-    def _post_analyze(self):
-        """POST /api/analyze — vision-based road/direction analysis via Claude."""
-        DEFAULT = json.dumps({
-            "direction": "straight",
-            "confidence": 0.5,
-            "road_detected": False,
-            "description": "解析不可"
-        }).encode()
-
-        def respond(data: bytes):
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(data)
-
-        api_key = os.environ.get('ANTHROPIC_API_KEY', '')
-        if not api_key:
-            print('  \033[33m⚠  /api/analyze: ANTHROPIC_API_KEY not set\033[0m')
-            respond(DEFAULT)
-            return
-
-        try:
-            length     = int(self.headers.get('Content-Length', 0))
-            body       = json.loads(self.rfile.read(length))
-            image_b64  = body.get('image', '')
-            if not image_b64:
-                raise ValueError('image field missing')
-
-            prompt = (
-                '以下の画像（カメラ映像の1フレーム）を解析し、'
-                '歩行者の進行方向を判断してください。\n'
-                '回答はJSONのみ（説明不要）:\n'
-                '{"direction":"straight"|"left"|"right"|"arrived",'
-                '"confidence":0.0-1.0,'
-                '"road_detected":true|false,'
-                '"description":"10文字以内の日本語"}\n'
-                'direction定義: straight=直進, left=左折推奨, '
-                'right=右折推奨, arrived=目的地付近\n'
-                'confidence: 判断の確信度\n'
-                'description: 状況の短い説明（例: 直進可能, 左に道あり）'
-            )
-
-            payload = json.dumps({
-                "model": "claude-sonnet-4-6",
-                "max_tokens": 150,
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": image_b64
-                            }
-                        },
-                        {"type": "text", "text": prompt}
-                    ]
-                }]
-            }).encode()
-
-            req = urllib.request.Request(
-                'https://api.anthropic.com/v1/messages',
-                data=payload,
-                headers={
-                    'x-api-key': api_key,
-                    'anthropic-version': '2023-06-01',
-                    'content-type': 'application/json'
-                },
-                method='POST'
-            )
-
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                result = json.loads(resp.read())
-
-            raw = result['content'][0]['text'].strip()
-            m = re.search(r'\{[^{}]+\}', raw, re.DOTALL)
-            parsed = json.loads(m.group() if m else raw)
-
-            direction = parsed.get('direction', 'straight')
-            if direction not in ('straight', 'left', 'right', 'arrived'):
-                direction = 'straight'
-            confidence    = max(0.0, min(1.0, float(parsed.get('confidence', 0.5))))
-            road_detected = bool(parsed.get('road_detected', False))
-            description   = str(parsed.get('description', ''))[:10]
-
-            out = json.dumps({
-                "direction":     direction,
-                "confidence":    round(confidence, 3),
-                "road_detected": road_detected,
-                "description":   description
-            }).encode()
-            respond(out)
-
-        except Exception as e:
-            print(f'  \033[31m✗  /api/analyze error: {e}\033[0m')
-            respond(DEFAULT)
-
-    # ── Quiet log: only show writes and errors ───────────────
     def log_message(self, fmt, *args):
         line = fmt % args
         code = args[1] if len(args) > 1 else ''

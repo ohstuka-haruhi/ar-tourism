@@ -309,23 +309,8 @@
     #sort-toolbar.show { display: flex; }
     #sort-info { font-size: 12px; color: var(--muted); flex: 1; }
 
-    /* ── Route ordering ── */
-    #route-toolbar {
-      display: none; align-items: center; gap: 10px; flex-wrap: wrap;
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 12px; padding: 10px 14px; margin-bottom: 14px;
-    }
-    #route-toolbar.show { display: flex; }
-    #route-stats { font-size: 12px; color: var(--muted); flex: 1; }
-    .route-order-badge {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 26px; height: 26px; border-radius: 50%;
-      background: var(--accent-dark); color: #fff;
-      font-size: 11px; font-weight: 700; flex-shrink: 0;
-    }
     .drag-handle { cursor: grab; color: var(--muted); padding: 0 6px; font-size: 16px; }
     .drag-handle:active { cursor: grabbing; }
-    .route-check { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent-dark); }
     tr.drag-over-top    { box-shadow: 0 -2px 0 var(--accent); }
     tr.drag-over-bottom { box-shadow: 0  2px 0 var(--accent); }
     tr.dragging { opacity: 0.35; }
@@ -547,7 +532,6 @@
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-secondary" onclick="toggleSortMode()" id="sort-mode-btn">⇅ 並び替え</button>
-        <button class="btn btn-secondary" onclick="toggleRouteMode()" id="route-mode-btn">🗺️  順路設定</button>
         <button class="btn btn-secondary" onclick="openSpotsMap()">🗺️ 地図で確認</button>
         <button class="btn btn-secondary" onclick="openIntroModal()">📜 案内メッセージ</button>
         <button class="btn btn-secondary" onclick="openBatchPhotoImport()">📷 写真から一括追加</button>
@@ -560,18 +544,11 @@
       <button class="btn btn-success btn-sm" onclick="saveSortOrder()">💾 並び順を保存</button>
       <button class="btn btn-secondary btn-sm" onclick="toggleSortMode()">✕ 終了</button>
     </div>
-    <!-- Route toolbar (visible in route mode) -->
-    <div id="route-toolbar">
-      <span>🗺️ 順路設定モード</span>
-      <span id="route-stats">—</span>
-      <button class="btn btn-success btn-sm" onclick="saveRoute()">💾 順路を保存</button>
-      <button class="btn btn-secondary btn-sm" onclick="toggleRouteMode()">✕ 終了</button>
-    </div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th class="route-col" id="route-col-head" style="display:none">順路</th>
+            <th class="route-col" id="route-col-head" style="display:none">並び</th>
             <th>名前</th>
             <th>Category</th>
             <th>Coordinates</th>
@@ -646,7 +623,6 @@
   <div id="tab-tracks" style="display:none">
     <div id="tracks-controls">
       <button class="btn btn-sm tracks-mode-btn active" id="btn-routes"  onclick="setTracksMode('routes')">👤 個人ルート</button>
-      <button class="btn btn-sm tracks-mode-btn"        id="btn-pathway" onclick="setTracksMode('pathway')">🛤 通路</button>
       <button class="btn btn-sm tracks-mode-btn"        id="btn-heat"    onclick="setTracksMode('heat')">🔥 ヒートマップ</button>
       <button class="btn btn-secondary btn-sm" onclick="reloadTracksTab()">🔄 更新</button>
       <span id="tracks-info"></span>
@@ -709,7 +685,7 @@
         </div>
         <div class="field">
           <label>AR矢印表示距離 (m)</label>
-          <input type="number" id="f-ar-max-dist" placeholder="省略時: 100m" min="10" max="1000">
+          <input type="number" id="f-ar-max-dist" placeholder="省略時: 30m" min="10" max="1000">
         </div>
 
         <!-- Coordinates -->
@@ -1038,14 +1014,13 @@ function genId() {
 // ─────────────────────────────────────────────────────────
 const CAT_COLORS = { heritage:'heritage', nature:'nature', facility:'facility', shop:'shop', signage:'signage' };
 
-const ROUTE_NUMS = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
-let routeMode = false;
 let sortMode  = false;
 
 function toggleSortMode() {
   sortMode = !sortMode;
   document.getElementById('sort-toolbar').classList.toggle('show', sortMode);
   document.getElementById('sort-mode-btn').textContent = sortMode ? '✕ 並び替え終了' : '⇅ 並び替え';
+  document.getElementById('route-col-head').style.display = sortMode ? '' : 'none';
   renderTable();
 }
 
@@ -1066,13 +1041,6 @@ function renderTable() {
   document.getElementById('spot-count').textContent = spots.length;
   const tbody = document.getElementById('spots-tbody');
 
-  // Build route order map (inRoute spots sorted by routeOrder)
-  const routeOrdered = spots
-    .filter(s => s.inRoute)
-    .sort((a, b) => (a.routeOrder || 999) - (b.routeOrder || 999));
-  const routeIdxMap = {};
-  routeOrdered.forEach((s, i) => { routeIdxMap[s.id] = i; });
-
   if (spots.length === 0) {
     tbody.innerHTML = _spotsLoaded
       ? '<tr class="empty-row"><td colspan="7">No spots yet. Click "Add Spot" to create one.</td></tr>'
@@ -1084,17 +1052,11 @@ function renderTable() {
     const name    = s.name.jp || s.name.en || Object.values(s.name)[0] || '';
     const desc    = (s.description.jp || s.description.en || Object.values(s.description)[0] || '').slice(0, 80);
     const cats    = Array.isArray(s.category) ? s.category : [s.category || 'heritage'];
-    const inRoute = !!s.inRoute;
-    const rIdx    = routeIdxMap[s.id];
-    const badge   = (rIdx !== undefined)
-      ? `<span class="route-order-badge">${ROUTE_NUMS[rIdx] || rIdx + 1}</span>`
-      : '';
 
     return `
-    <tr data-id="${s.id}" draggable="${routeMode || sortMode}">
-      <td class="route-col" style="display:${(routeMode || sortMode) ? '' : 'none'}">
+    <tr data-id="${s.id}" draggable="${sortMode}">
+      <td class="route-col" style="display:${sortMode ? '' : 'none'}">
         <span class="drag-handle">☰</span>
-        ${routeMode ? `<input type="checkbox" class="route-check" data-id="${s.id}" ${inRoute ? 'checked' : ''}>${badge}` : ''}
       </td>
       <td class="name-cell"><span class="ellipsis" style="max-width:160px">${esc(name)}</span></td>
       <td style="white-space:nowrap">${cats.map(c => `<span class="cat-badge ${CAT_COLORS[c] || ''}">${esc(c)}</span>`).join(' ')}</td>
@@ -1110,42 +1072,6 @@ function renderTable() {
       </td>
     </tr>`;
   }).join('');
-
-  updateRouteStats();
-}
-
-function updateRouteStats() {
-  const n = spots.filter(s => s.inRoute).length;
-  document.getElementById('route-stats').textContent =
-    n > 0 ? `順路スポット ${n}件 設定済み` : 'スポットにチェックを入れて順路を作成';
-}
-
-function toggleRouteMode() {
-  routeMode = !routeMode;
-  document.getElementById('route-toolbar').classList.toggle('show', routeMode);
-  document.getElementById('route-col-head').style.display = routeMode ? '' : 'none';
-  document.getElementById('route-mode-btn').textContent = routeMode ? '✕ 設定終了' : '🗺️ 順路設定';
-  renderTable();
-}
-
-async function saveRoute() {
-  // Assign routeOrder based on current array order among inRoute spots
-  let order = 1;
-  spots.forEach(s => {
-    if (s.inRoute) { s.routeOrder = order++; }
-    else           { delete s.routeOrder; }
-  });
-  const btn = document.querySelector('#route-toolbar .btn-success');
-  btn.disabled = true; btn.textContent = '保存中…';
-  try {
-    await saveSpots();
-    showToast('順路を保存しました ✓');
-    renderTable();
-  } catch(e) {
-    showToast('保存失敗: ' + e.message);
-  } finally {
-    btn.disabled = false; btn.textContent = '💾 順路を保存';
-  }
 }
 
 // ── Drag & Drop (event delegation on tbody) ────────────
@@ -1155,7 +1081,7 @@ function initRouteEvents() {
 
   tbody.addEventListener('dragstart', e => {
     const tr = e.target.closest('tr[data-id]');
-    if (!tr || (!routeMode && !sortMode)) return;
+    if (!tr || !sortMode) return;
     dragSrcId = tr.dataset.id;
     tr.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
@@ -1192,15 +1118,6 @@ function initRouteEvents() {
     const [moved] = spots.splice(srcIdx, 1);
     const newIdx  = spots.findIndex(s => s.id === tr.dataset.id);
     spots.splice(insertBefore ? newIdx : newIdx + 1, 0, moved);
-    renderTable();
-  });
-
-  // Checkbox toggle via delegation
-  tbody.addEventListener('change', e => {
-    if (!e.target.classList.contains('route-check')) return;
-    const id = e.target.dataset.id;
-    const s  = spots.find(x => x.id === id);
-    if (s) s.inRoute = e.target.checked;
     renderTable();
   });
 }
@@ -2338,7 +2255,7 @@ function showTab(tab) {
   document.getElementById('tab-analytics').style.display = tab === 'analytics' ? '' : 'none';
   document.getElementById('tab-tracks').style.display    = tab === 'tracks'    ? '' : 'none';
   if (tab === 'analytics') loadAnalytics();
-  if (tab === 'tracks')    { initTracksMap(); loadTracks(); loadPathways(); }
+  if (tab === 'tracks')    { initTracksMap(); loadTracks(); }
 }
 
 // ─────────────────────────────────────────────────────────
@@ -2346,11 +2263,9 @@ function showTab(tab) {
 // ─────────────────────────────────────────────────────────
 let _tracksMap      = null;
 let _tracksData     = [];
-let _pathwayData    = [];   // entries from routes.json with type='pathway'
 let _tracksMode     = 'routes';
 let _routeLayer     = null;
 let _heatLayer      = null;
-let _pathwayLayer   = null;
 let _tracksMapReady = false;
 
 const ROUTE_COLORS = [
@@ -2387,41 +2302,19 @@ async function loadTracks() {
   renderTracks();
 }
 
-async function loadPathways() {
-  try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/pathways?select=*&order=created_at.asc`,
-      { headers: SB_HEADERS }
-    );
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const rows = await r.json();
-    _pathwayData = rows.map(row => ({
-      ...(row.points || {}),
-      id:   row.id,
-      name: row.name || (row.points || {}).name || ''
-    }));
-  } catch(e) {
-    _pathwayData = [];
-  }
-  updateTracksInfo();
-  if (_tracksMode === 'pathway') renderTracks();
-}
-
 async function reloadTracksTab() {
-  await Promise.all([loadTracks(), loadPathways()]);
+  await loadTracks();
 }
 
 function updateTracksInfo() {
   const totalPts = _tracksData.reduce((s, t) => s + (t.points || []).length, 0);
-  const trackPart   = `${_tracksData.length}セッション・計${totalPts}点`;
-  const pathwayPart = _pathwayData.length ? `　／　通路 ${_pathwayData.length}本` : '';
-  document.getElementById('tracks-info').textContent = trackPart + pathwayPart;
+  document.getElementById('tracks-info').textContent =
+    `${_tracksData.length}セッション・計${totalPts}点`;
 }
 
 function setTracksMode(mode) {
   _tracksMode = mode;
   document.getElementById('btn-routes') .classList.toggle('active', mode === 'routes');
-  document.getElementById('btn-pathway').classList.toggle('active', mode === 'pathway');
   document.getElementById('btn-heat')   .classList.toggle('active', mode === 'heat');
   renderTracks();
 }
@@ -2430,12 +2323,6 @@ function renderTracks() {
   if (!_tracksMap) return;
   if (_routeLayer)   { _tracksMap.removeLayer(_routeLayer);   _routeLayer   = null; }
   if (_heatLayer)    { _tracksMap.removeLayer(_heatLayer);    _heatLayer    = null; }
-  if (_pathwayLayer) { _tracksMap.removeLayer(_pathwayLayer); _pathwayLayer = null; }
-
-  if (_tracksMode === 'pathway') {
-    _renderPathwayLayer();
-    return;
-  }
 
   const allPts = _tracksData.flatMap(t => (t.points || []).map(p => [p.lat, p.lng]));
   if (!allPts.length) return;
@@ -2467,60 +2354,6 @@ function renderTracks() {
     _heatLayer.addTo(_tracksMap);
     _tracksMap.fitBounds(allPts, { padding: [24, 24] });
   }
-}
-
-function _renderPathwayLayer() {
-  if (!_pathwayData.length) {
-    document.getElementById('tracks-info').textContent += '　通路データなし';
-    return;
-  }
-
-  _pathwayLayer = L.layerGroup();
-  const allPts  = [];
-
-  _pathwayData.forEach((entry, idx) => {
-    const pts = (entry.pathway || []).map(p => [p.lat, p.lng]);
-    if (pts.length < 2) return;
-    pts.forEach(p => allPts.push(p));
-
-    const color = ROUTE_COLORS[idx % ROUTE_COLORS.length];
-    const date  = entry.createdAt
-      ? new Date(entry.createdAt).toLocaleString('ja-JP')
-      : '日時不明';
-
-    // セグメントごとに距離色グラデーション（開始=緑、終了=青）
-    for (let i = 1; i < pts.length; i++) {
-      const t = i / (pts.length - 1);           // 0=start, 1=end
-      const r = Math.round(16  + t * 43);        // green→blue
-      const g = Math.round(185 - t * 55);
-      const b = Math.round(129 + t * 117);
-      const segColor = `rgb(${r},${g},${b})`;
-      L.polyline([pts[i - 1], pts[i]], {
-        color: segColor, weight: 5, opacity: 0.85
-      }).addTo(_pathwayLayer);
-    }
-
-    // 始点マーカー（緑）
-    L.circleMarker(pts[0], {
-      radius: 7, fillColor: '#10b981', color: '#fff', weight: 2, fillOpacity: 1
-    }).bindTooltip('START', { permanent: false }).addTo(_pathwayLayer);
-
-    // 終点マーカー（青）
-    L.circleMarker(pts[pts.length - 1], {
-      radius: 7, fillColor: '#3b82f6', color: '#fff', weight: 2, fillOpacity: 1
-    }).bindTooltip('END', { permanent: false }).addTo(_pathwayLayer);
-
-    // ポップアップ（ライン全体に）
-    L.polyline(pts, { color: 'transparent', weight: 12 })
-      .bindPopup(
-        `<b>${esc(entry.name || '通路データ')}</b><br>` +
-        `${date}<br>${pts.length}ポイント`
-      )
-      .addTo(_pathwayLayer);
-  });
-
-  _pathwayLayer.addTo(_tracksMap);
-  if (allPts.length) _tracksMap.fitBounds(allPts, { padding: [28, 28] });
 }
 
 // ─────────────────────────────────────────────────────────
