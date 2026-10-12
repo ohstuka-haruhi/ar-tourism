@@ -229,7 +229,7 @@
       color: #fff;
     }
     /* Hide non-matching cards */
-    .fb-card[data-category].hidden { display: none; }
+    .fb-card.hidden { display: none; }
 
     /* ── AR HTML Overlay (compass-driven callouts) ── */
     #ar-overlay {
@@ -457,7 +457,7 @@
 <!-- ── Language picker (first launch) ── -->
 <div id="lang-picker">
   <div id="lang-picker-icon">⛩</div>
-  <div id="lang-picker-title">ナビゲーションAR</div>
+  <div id="lang-picker-title">ナビゲーションAR<br>Navigation AR</div>
   <div id="lang-picker-sub">
     言語を選択してください<br>
     Choose your language / 请选择语言
@@ -749,8 +749,16 @@ let fallbackReason = '';
 const t   = key => I18N[lang][key] || I18N.en[key];
 const tCat = cat => (I18N[lang].cat || {})[cat] || (I18N.en.cat[cat]) || cat;
 
+// サービス名：日本語は「ナビゲーションAR」、それ以外の言語は共通で「Navigation AR」
+function appName() { return lang === 'jp' ? 'ナビゲーションAR' : 'Navigation AR'; }
+function applyAppName() {
+  document.getElementById('app-title').textContent         = '⛩ ' + appName();
+  document.getElementById('fb-title').textContent          = appName();
+}
+
 function setLang(l) {
   lang = l;
+  applyAppName();
   localStorage.setItem('arLang', l);
   const sel = document.getElementById('lang-select');
   if (sel) sel.value = l;
@@ -1029,7 +1037,7 @@ function handleModalBg(e) {
 function toggleFallback(show) {
   const el = document.getElementById('fallback');
   if (show) {
-    document.getElementById('fb-title').textContent = 'ナビゲーションAR';
+    document.getElementById('fb-title').textContent = appName();
     document.getElementById('fb-msg').textContent   = fallbackReason || t('listView');
     el.classList.add('show');
     activeFilter = 'all';   // reset filter on open
@@ -1776,6 +1784,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const _sel = document.getElementById('lang-select');
   if (_sel) _sel.value = lang;
   if (lang === 'ar' || lang === 'ur') document.body.dir = 'rtl';
+  applyAppName();
   document.getElementById('nearby-label').textContent = t('nearby');
 
   // 現地チェック（エリア外なら起動しない）
